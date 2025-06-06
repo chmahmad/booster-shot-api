@@ -1,15 +1,7 @@
-// src/pages/api/booster.js
-
 export default function handler(req, res) {
   if (req.method === 'POST') {
     const { contacts, message } = req.body;
-
-    // For now, just return what you got
-    res.status(200).json({
-      status: 'received',
-      contacts,
-      message,
-    });
+    res.status(200).json({ status: 'received', contacts, message });
   } else {
     res.status(405).json({ error: 'Method not allowed' });
   }
