@@ -11,7 +11,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const url = new URL('https://api.gohighlevel.com/v1/contacts/v1/contacts');
+    const url = new URL('https://api.gohighlevel.com/v1/contacts/');
+
     url.searchParams.append('accountId', ACCOUNT_ID);
     // You can add pagination parameters here if needed, e.g. page, limit
 
