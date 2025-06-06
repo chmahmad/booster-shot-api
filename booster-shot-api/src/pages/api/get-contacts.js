@@ -9,15 +9,20 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Missing GHL_API_TOKEN in environment variables' });
   }
 
-  const contacts = [];
-  let page = 1;
-  const limit = 100; // max allowed by GHL API if documented, else use 50
+  let contacts = [];
+  let startAfter = null;
+  let startAfterId = null;
+  const limit = 100; // if supported
 
   try {
     while (true) {
-      const url = `https://rest.gohighlevel.com/v1/contacts?page=${page}&limit=${limit}`;
+      const url = new URL('https://rest.gohighlevel.com/v1/contacts');
 
-      const response = await fetch(url, {
+      if (startAfter) url.searchParams.append('startAfter', startAfter);
+      if (startAfterId) url.searchParams.append('startAfterId', startAfterId);
+      url.searchParams.append('limit', limit);
+
+      const response = await fetch(url.toString(), {
         headers: {
           'Authorization': `Bearer ${API_TOKEN}`,
           'Content-Type': 'application/json',
@@ -32,18 +37,20 @@ export default async function handler(req, res) {
       const data = await response.json();
 
       if (!data.contacts || data.contacts.length === 0) {
-        // No more contacts, break the loop
-        break;
+        break; // no more contacts
       }
 
-      contacts.push(...data.contacts);
+      contacts = contacts.concat(data.contacts);
 
-      if (data.contacts.length < limit) {
-        // Less than limit means last page
+      // For next iteration, update cursor params
+      // Assume API returns something like data.pagination with startAfter and startAfterId for next page
+      if (data.pagination && data.pagination.startAfter && data.pagination.startAfterId) {
+        startAfter = data.pagination.startAfter;
+        startAfterId = data.pagination.startAfterId;
+      } else {
+        // No pagination cursor returned means we are done
         break;
       }
-
-      page++;
     }
 
     res.status(200).json({ contacts });
