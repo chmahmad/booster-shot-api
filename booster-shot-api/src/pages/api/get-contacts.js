@@ -4,17 +4,15 @@ export default async function handler(req, res) {
   }
 
   const API_TOKEN = process.env.GHL_API_TOKEN;
-  const ACCOUNT_ID = process.env.GHL_ACCOUNT_ID;
 
-  if (!API_TOKEN || !ACCOUNT_ID) {
-    return res.status(500).json({ error: 'Missing GHL_API_TOKEN or GHL_ACCOUNT_ID in environment variables' });
+  if (!API_TOKEN) {
+    return res.status(500).json({ error: 'Missing GHL_API_TOKEN in environment variables' });
   }
 
   try {
-    const url = new URL('https://api.gohighlevel.com/v1/contacts/');
-    url.searchParams.append('accountId', ACCOUNT_ID);
+    const url = 'https://rest.gohighlevel.com/v1/contacts';
 
-    const response = await fetch(url.toString(), {
+    const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${API_TOKEN}`,
         'Content-Type': 'application/json',
