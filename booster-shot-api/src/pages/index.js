@@ -1,3 +1,5 @@
+console.log("Hello from index.js");
+
 import { useEffect, useState } from 'react';
 
 export default function Home() {
