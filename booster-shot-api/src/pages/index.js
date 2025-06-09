@@ -10,6 +10,7 @@ export default function ContactList() {
   const [totalCount, setTotalCount] = useState(0);
   const [nextPageUrl, setNextPageUrl] = useState(null);
   const [prevPages, setPrevPages] = useState([]);
+  const [contactsLoaded, setContactsLoaded] = useState(false);
 
   const [debugInfo, setDebugInfo] = useState({});
 
@@ -18,19 +19,8 @@ export default function ContactList() {
     setLocationId(params.get('location_id'));
   }, []);
 
-  useEffect(() => {
-    if (locationId) {
-      // Reset pagination stack and load first page
-      setPrevPages([]);
-      const initialUrl = `/api/get-contacts?locationId=${locationId}&limit=${limit}`;
-      loadPage(initialUrl, 1, true);
-    }
-  }, [locationId, limit]);
-
   const loadPage = async (url, pageNumber, resetHistory = false) => {
     setLoading(true);
-    console.log('Loading:', url);
-
     try {
       const res = await fetch(url);
       const data = await res.json();
@@ -48,14 +38,12 @@ export default function ContactList() {
         setContacts(data.contacts || []);
         setTotalCount(data.pagination?.total || 0);
         setCurrentPage(pageNumber);
-
-        // Set nextPageUrl only if hasMore is true
         setNextPageUrl(data.pagination?.hasMore ? data.pagination.nextPageUrl : null);
+        setContactsLoaded(true);
 
         if (resetHistory) {
           setPrevPages([]);
         } else {
-          // Push current URL to prevPages stack only if navigating forward
           if (pageNumber > prevPages.length + 1) {
             setPrevPages((prev) => [...prev, url]);
           }
@@ -101,31 +89,19 @@ export default function ContactList() {
     setSelectedContacts(newSet);
   };
 
+  const handleLoadContacts = () => {
+    if (locationId) {
+      const initialUrl = `/api/get-contacts?locationId=${locationId}&limit=${limit}`;
+      loadPage(initialUrl, 1, true);
+    }
+  };
+
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial' }}>
       <h1>🚀 Booster Shot Campaign Launcher</h1>
 
       {locationId ? (
         <>
-          {/* Debug Panel */}
-          <div style={{
-            background: '#f0f0f0',
-            padding: '10px',
-            marginBottom: '20px',
-            borderRadius: '4px'
-          }}>
-            <h4>Debug Info:</h4>
-            <pre>
-              {JSON.stringify({
-                currentPage,
-                totalCount,
-                hasNextPage: !!nextPageUrl,
-                nextPageUrlSnippet: nextPageUrl?.split('startAfter=')[1]?.substring(0, 20),
-                loading
-              }, null, 2)}
-            </pre>
-          </div>
-
           <p><strong>Subaccount ID:</strong> {locationId}</p>
 
           <textarea
@@ -133,60 +109,99 @@ export default function ContactList() {
             style={{ width: '100%', height: '100px', marginBottom: '20px' }}
           />
 
-          <h3>Select Campaign Contacts</h3>
+          <button
+            onClick={handleLoadContacts}
+            disabled={loading}
+            style={{
+              marginBottom: '20px',
+              padding: '10px 20px',
+              fontSize: '16px',
+              backgroundColor: '#0070f3',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer'
+            }}
+          >
+            {loading ? 'Loading...' : 'Select Campaign Contacts'}
+          </button>
 
-          <div style={{ marginBottom: '10px' }}>
-            <label>Show </label>
-            <select value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <label> contacts per page</label>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-            <button onClick={toggleSelectAll}>
-              {selectedContacts.size < contacts.length ? 'Select All' : 'Unselect All'}
-            </button>
-            <div>Selected: {selectedContacts.size}</div>
-          </div>
-
-          {contacts.map((contact) => (
-            <div key={contact.id} style={{ borderBottom: '1px solid #ddd', padding: '5px 0', display: 'flex', alignItems: 'center' }}>
-              <input
-                type="checkbox"
-                checked={selectedContacts.has(contact.id)}
-                onChange={() => toggleSelectContact(contact.id)}
-                style={{ marginRight: '10px' }}
-              />
-              <div>
-                <div><strong>{contact.firstName || ''} {contact.lastName || ''}</strong></div>
-                <div>{contact.email || ''}</div>
-                <div>{contact.phone || ''}</div>
+          {contactsLoaded && (
+            <>
+              <div style={{
+                background: '#f0f0f0',
+                padding: '10px',
+                marginBottom: '20px',
+                borderRadius: '4px'
+              }}>
+                <h4>Debug Info:</h4>
+                <pre>
+                  {JSON.stringify({
+                    currentPage,
+                    totalCount,
+                    hasNextPage: !!nextPageUrl,
+                    nextPageUrlSnippet: nextPageUrl?.split('startAfter=')[1]?.substring(0, 20),
+                    loading
+                  }, null, 2)}
+                </pre>
               </div>
-            </div>
-          ))}
 
-          <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <button onClick={handlePreviousPage} disabled={currentPage === 1 || loading}>
-              Previous
-            </button>
-            <div>Page {currentPage} of {Math.ceil(totalCount / limit)}</div>
-            <button
-              onClick={handleNextPage}
-              disabled={!nextPageUrl || loading}
-              style={{
-                backgroundColor: nextPageUrl ? '#0070f3' : '#ccc',
-                color: '#fff',
-                border: 'none',
-                padding: '8px 16px',
-                cursor: nextPageUrl ? 'pointer' : 'default'
-              }}
-            >
-              Next
-            </button>
-          </div>
+              <h3>Campaign Contacts</h3>
+
+              <div style={{ marginBottom: '10px' }}>
+                <label>Show </label>
+                <select value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <label> contacts per page</label>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                <button onClick={toggleSelectAll}>
+                  {selectedContacts.size < contacts.length ? 'Select All' : 'Unselect All'}
+                </button>
+                <div>Selected: {selectedContacts.size}</div>
+              </div>
+
+              {contacts.map((contact) => (
+                <div key={contact.id} style={{ borderBottom: '1px solid #ddd', padding: '5px 0', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedContacts.has(contact.id)}
+                    onChange={() => toggleSelectContact(contact.id)}
+                    style={{ marginRight: '10px' }}
+                  />
+                  <div>
+                    <div><strong>{contact.firstName || ''} {contact.lastName || ''}</strong></div>
+                    <div>{contact.email || ''}</div>
+                    <div>{contact.phone || ''}</div>
+                  </div>
+                </div>
+              ))}
+
+              <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <button onClick={handlePreviousPage} disabled={currentPage === 1 || loading}>
+                  Previous
+                </button>
+                <div>Page {currentPage} of {Math.ceil(totalCount / limit)}</div>
+                <button
+                  onClick={handleNextPage}
+                  disabled={!nextPageUrl || loading}
+                  style={{
+                    backgroundColor: nextPageUrl ? '#0070f3' : '#ccc',
+                    color: '#fff',
+                    border: 'none',
+                    padding: '8px 16px',
+                    cursor: nextPageUrl ? 'pointer' : 'default'
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            </>
+          )}
         </>
       ) : (
         <p>Please provide a location_id URL parameter.</p>
