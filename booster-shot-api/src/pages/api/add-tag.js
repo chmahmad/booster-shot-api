@@ -5,17 +5,14 @@ export default async function handler(req, res) {
 
   const { contactIds, tag } = req.body;
 
-  console.log('Add tag request body:', req.body);
-
   if (!contactIds || !Array.isArray(contactIds) || contactIds.length === 0 || !tag) {
-    console.error('Missing contactIds or tag:', { contactIds, tag });
-    return res.status(400).json({ error: 'Missing contactIds or tag' });
+    return res.status(400).json({ error: 'Missing contactIds array or tag' });
   }
 
   try {
     const results = [];
 
-    // Loop through each contactId and add the tag
+    // Loop over each contact ID to add the tag
     for (const contactId of contactIds) {
       const ghlApiUrl = `https://rest.gohighlevel.com/v1/contacts/${contactId}/tags`;
 
@@ -31,14 +28,21 @@ export default async function handler(req, res) {
       const data = await response.json();
 
       if (!response.ok) {
-        console.error(`GHL Error for contactId ${contactId}:`, data);
+        // Log error and collect failure info
         results.push({ contactId, success: false, error: data.error || 'Failed to add tag' });
       } else {
         results.push({ contactId, success: true, data });
       }
     }
 
-    return res.status(200).json({ success: true, results });
+    // Check if all succeeded
+    const allSuccess = results.every(r => r.success);
+
+    if (allSuccess) {
+      return res.status(200).json({ success: true, results });
+    } else {
+      return res.status(207).json({ success: false, results }); // 207 Multi-Status
+    }
   } catch (error) {
     console.error('API Add Tag Error:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
