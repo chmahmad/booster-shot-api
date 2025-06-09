@@ -1,40 +1,44 @@
-// /pages/api/add-tag.js
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const { contactId, tagName } = req.body;
+  const { contactIds, tag } = req.body;
 
-  console.log('Add tag request body:', req.body); // Log incoming request body
+  console.log('Add tag request body:', req.body);
 
-  if (!contactId || !tagName) {
-    console.error('Missing contactId or tagName:', { contactId, tagName });
-    return res.status(400).json({ error: 'Missing contactId or tagName' });
+  if (!contactIds || !Array.isArray(contactIds) || contactIds.length === 0 || !tag) {
+    console.error('Missing contactIds or tag:', { contactIds, tag });
+    return res.status(400).json({ error: 'Missing contactIds or tag' });
   }
 
   try {
-    // Go High Level API endpoint for adding a tag to a contact
-    const ghlApiUrl = `https://rest.gohighlevel.com/v1/contacts/${contactId}/tags`;
+    const results = [];
 
-    const response = await fetch(ghlApiUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.GHL_API_KEY}`, // Place your GHL API key in .env.local
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ tag: tagName }),
-    });
+    // Loop through each contactId and add the tag
+    for (const contactId of contactIds) {
+      const ghlApiUrl = `https://rest.gohighlevel.com/v1/contacts/${contactId}/tags`;
 
-    const data = await response.json();
+      const response = await fetch(ghlApiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.GHL_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ tag }),
+      });
 
-    if (!response.ok) {
-      console.error('GHL Error:', data);
-      return res.status(response.status).json({ error: data.error || 'Failed to add tag' });
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(`GHL Error for contactId ${contactId}:`, data);
+        results.push({ contactId, success: false, error: data.error || 'Failed to add tag' });
+      } else {
+        results.push({ contactId, success: true, data });
+      }
     }
 
-    return res.status(200).json({ success: true, data });
+    return res.status(200).json({ success: true, results });
   } catch (error) {
     console.error('API Add Tag Error:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
