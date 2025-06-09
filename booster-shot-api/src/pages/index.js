@@ -50,7 +50,7 @@ export default function Home() {
     setContacts(data.contacts || []);
     setPagination(data.nextPage || null);
 
-    if (reset && data.totalCount) {
+    if (data.totalCount !== undefined) {
       setTotalCount(data.totalCount);
     }
 
@@ -166,7 +166,7 @@ export default function Home() {
 
             <div>Page {currentPage} of {totalPages || '...'}</div>
 
-            <button onClick={handleNextPage} disabled={currentPage === totalPages || loading || !pagination}>
+            <button onClick={handleNextPage} disabled={currentPage >= totalPages || loading}>
               Next
             </button>
           </div>

@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Missing GHL_API_TOKEN in environment variables' });
   }
 
-  const limit = parseInt(req.query.limit) || 100; // from query, fallback to 100
+  const limit = parseInt(req.query.limit) || 100;
   const startAfter = req.query.startAfter || null;
   const startAfterId = req.query.startAfterId || null;
 
@@ -40,7 +40,7 @@ export default async function handler(req, res) {
         startAfter: data.pagination.startAfter || null,
         startAfterId: data.pagination.startAfterId || null,
       } : null,
-      total: data.meta?.total || data.total || 0, // adjust depending on actual API response
+      totalCount: data.meta?.total || data.total || 0,
     });
 
   } catch (error) {
