@@ -33,19 +33,19 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
-    
-    // Critical Fix: Proper pagination detection
-    const receivedCount = data.contacts?.length || 0;
-    const hasMore = receivedCount > 0 && receivedCount >= limit;
-    const nextPageToken = hasMore ? data.pagination : null;
+
+    // Extract pagination info from meta
+    const meta = data.meta || {};
+    const hasMore = !!(meta.startAfter && meta.startAfterId);
+    const nextPageUrl = hasMore
+      ? `/api/get-contacts?locationId=${locationId}&limit=${limit}&startAfter=${meta.startAfter}&startAfterId=${meta.startAfterId}`
+      : null;
 
     return res.status(200).json({
       contacts: data.contacts || [],
       pagination: {
-        nextPageUrl: nextPageToken
-          ? `/api/get-contacts?locationId=${locationId}&limit=${limit}&startAfter=${nextPageToken.startAfter}&startAfterId=${nextPageToken.startAfterId}`
-          : null,
-        total: data.meta?.total || data.total || 0,
+        nextPageUrl,
+        total: meta.total || 0,
         hasMore
       }
     });

@@ -20,12 +20,13 @@ export default function ContactList() {
 
   useEffect(() => {
     if (locationId) {
+      // Reset pagination stack and load first page
       setPrevPages([]);
-      loadPage(`/api/get-contacts?locationId=${locationId}&limit=${limit}`, 1, true);
+      const initialUrl = `/api/get-contacts?locationId=${locationId}&limit=${limit}`;
+      loadPage(initialUrl, 1, true);
     }
   }, [locationId, limit]);
 
-  // ✅ Updated loadPage function with hasMore check
   const loadPage = async (url, pageNumber, resetHistory = false) => {
     setLoading(true);
     console.log('Loading:', url);
@@ -48,13 +49,16 @@ export default function ContactList() {
         setTotalCount(data.pagination?.total || 0);
         setCurrentPage(pageNumber);
 
-        // ✅ Critical fix: only set nextPageUrl if hasMore is true
+        // Set nextPageUrl only if hasMore is true
         setNextPageUrl(data.pagination?.hasMore ? data.pagination.nextPageUrl : null);
 
         if (resetHistory) {
           setPrevPages([]);
-        } else if (pageNumber > prevPages.length + 1) {
-          setPrevPages((prev) => [...prev, url]);
+        } else {
+          // Push current URL to prevPages stack only if navigating forward
+          if (pageNumber > prevPages.length + 1) {
+            setPrevPages((prev) => [...prev, url]);
+          }
         }
 
         setSelectedContacts(new Set());
@@ -77,7 +81,8 @@ export default function ContactList() {
 
   const handlePreviousPage = () => {
     if (currentPage > 1 && prevPages[currentPage - 2]) {
-      loadPage(prevPages[currentPage - 2], currentPage - 1);
+      const prevUrl = prevPages[currentPage - 2];
+      loadPage(prevUrl, currentPage - 1);
       setPrevPages((prev) => prev.slice(0, currentPage - 2));
     }
   };
@@ -102,7 +107,7 @@ export default function ContactList() {
 
       {locationId ? (
         <>
-          {/* Debug Panel (for development only) */}
+          {/* Debug Panel */}
           <div style={{
             background: '#f0f0f0',
             padding: '10px',
@@ -115,7 +120,7 @@ export default function ContactList() {
                 currentPage,
                 totalCount,
                 hasNextPage: !!nextPageUrl,
-                nextPageUrl: nextPageUrl?.split('startAfter=')[1]?.substring(0, 20),
+                nextPageUrlSnippet: nextPageUrl?.split('startAfter=')[1]?.substring(0, 20),
                 loading
               }, null, 2)}
             </pre>
@@ -163,7 +168,6 @@ export default function ContactList() {
             </div>
           ))}
 
-          {/* ✅ Updated pagination with improved Next button */}
           <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <button onClick={handlePreviousPage} disabled={currentPage === 1 || loading}>
               Previous
@@ -173,18 +177,19 @@ export default function ContactList() {
               onClick={handleNextPage}
               disabled={!nextPageUrl || loading}
               style={{
-                backgroundColor: nextPageUrl ? '#4CAF50' : '#cccccc',
-                cursor: nextPageUrl ? 'pointer' : 'not-allowed'
+                backgroundColor: nextPageUrl ? '#0070f3' : '#ccc',
+                color: '#fff',
+                border: 'none',
+                padding: '8px 16px',
+                cursor: nextPageUrl ? 'pointer' : 'default'
               }}
             >
-              Next {nextPageUrl && `(More available)`}
+              Next
             </button>
           </div>
-
-          {loading && <div style={{ marginTop: '8px' }}>Loading...</div>}
         </>
       ) : (
-        <p>Loading subaccount ID...</p>
+        <p>Please provide a location_id URL parameter.</p>
       )}
     </div>
   );
