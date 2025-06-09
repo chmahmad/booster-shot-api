@@ -3,13 +3,16 @@ import { useEffect, useState } from 'react';
 export default function Home() {
   const [locationId, setLocationId] = useState(null);
   const [contacts, setContacts] = useState([]);
-  const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedContacts, setSelectedContacts] = useState(new Set());
   const [limit, setLimit] = useState(100);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [pageCursorMap, setPageCursorMap] = useState({ 1: { startAfter: null, startAfterId: null } });
+
+  // Map to store pagination cursors for each page
+  const [pageCursorMap, setPageCursorMap] = useState({
+    1: { startAfter: null, startAfterId: null },
+  });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -17,52 +20,54 @@ export default function Home() {
     setLocationId(locId);
   }, []);
 
+  // Load first page or reload when locationId or limit changes
   useEffect(() => {
     if (locationId) {
-      loadPage(1, true);
+      // Reset cursor map to start fresh
+      setPageCursorMap({ 1: { startAfter: null, startAfterId: null } });
+      loadPage(1);
     }
   }, [locationId, limit]);
 
-  const loadPage = async (pageNumber, reset = false) => {
+  const loadPage = async (pageNumber) => {
     const cursor = pageCursorMap[pageNumber] || { startAfter: null, startAfterId: null };
 
     setLoading(true);
 
-    const query = new URLSearchParams({
+    // Prepare query parameters
+    const params = new URLSearchParams({
       locationId,
       limit,
     });
+    if (cursor.startAfter) params.append('startAfter', cursor.startAfter);
+    if (cursor.startAfterId) params.append('startAfterId', cursor.startAfterId);
 
-    if (cursor.startAfter) query.append('startAfter', cursor.startAfter);
-    if (cursor.startAfterId) query.append('startAfterId', cursor.startAfterId);
+    try {
+      const res = await fetch(`/api/get-contacts?${params.toString()}`);
+      const data = await res.json();
 
-    const res = await fetch(`/api/get-contacts?${query.toString()}`);
-    const data = await res.json();
+      if (res.ok) {
+        setContacts(data.contacts || []);
+        setTotalCount(data.total || 0);
 
-    if (reset) {
-      setSelectedContacts(new Set());
-      setPageCursorMap({ 1: { startAfter: null, startAfterId: null } });
-      setCurrentPage(1);
-    } else {
-      setCurrentPage(pageNumber);
-    }
+        // Store cursor for next page if available
+        if (data.nextPage && data.nextPage.startAfter && data.nextPage.startAfterId) {
+          setPageCursorMap((prev) => ({
+            ...prev,
+            [pageNumber + 1]: {
+              startAfter: data.nextPage.startAfter,
+              startAfterId: data.nextPage.startAfterId,
+            },
+          }));
+        }
 
-    setContacts(data.contacts || []);
-    setPagination(data.nextPage || null);
-
-    if (data.totalCount !== undefined) {
-      setTotalCount(data.totalCount);
-    }
-
-    // Save cursor for NEXT page (pageNumber + 1)
-    if (data.nextPage && data.nextPage.startAfter && data.nextPage.startAfterId) {
-      setPageCursorMap((prev) => ({
-        ...prev,
-        [pageNumber + 1]: {
-          startAfter: data.nextPage.startAfter,
-          startAfterId: data.nextPage.startAfterId,
-        },
-      }));
+        setCurrentPage(pageNumber);
+        setSelectedContacts(new Set()); // Clear selections when page changes
+      } else {
+        alert('Failed to load contacts: ' + (data.error || 'Unknown error'));
+      }
+    } catch (error) {
+      alert('Error fetching contacts: ' + error.message);
     }
 
     setLoading(false);
@@ -166,7 +171,7 @@ export default function Home() {
 
             <div>Page {currentPage} of {totalPages || '...'}</div>
 
-            <button onClick={handleNextPage} disabled={currentPage >= totalPages || loading}>
+            <button onClick={handleNextPage} disabled={currentPage === totalPages || loading || !pageCursorMap[currentPage + 1]}>
               Next
             </button>
           </div>
