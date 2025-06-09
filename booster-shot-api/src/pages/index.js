@@ -7,8 +7,9 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [selectedContacts, setSelectedContacts] = useState(new Set());
   const [limit, setLimit] = useState(100);
-  const [page, setPage] = useState(1);
-  const [totalLoaded, setTotalLoaded] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [pageCursorMap, setPageCursorMap] = useState({ 1: { startAfter: null, startAfterId: null } });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -18,11 +19,13 @@ export default function Home() {
 
   useEffect(() => {
     if (locationId) {
-      fetchContacts({ reset: true });
+      loadPage(1, true);
     }
   }, [locationId, limit]);
 
-  const fetchContacts = async ({ startAfter = null, startAfterId = null, reset = false } = {}) => {
+  const loadPage = async (pageNumber, reset = false) => {
+    const cursor = pageCursorMap[pageNumber] || { startAfter: null, startAfterId: null };
+
     setLoading(true);
 
     const query = new URLSearchParams({
@@ -30,24 +33,53 @@ export default function Home() {
       limit,
     });
 
-    if (startAfter) query.append('startAfter', startAfter);
-    if (startAfterId) query.append('startAfterId', startAfterId);
+    if (cursor.startAfter) query.append('startAfter', cursor.startAfter);
+    if (cursor.startAfterId) query.append('startAfterId', cursor.startAfterId);
 
     const res = await fetch(`/api/get-contacts?${query.toString()}`);
     const data = await res.json();
 
     if (reset) {
-      setContacts(data.contacts);
-      setPage(1);
-      setTotalLoaded(data.contacts.length);
+      setSelectedContacts(new Set());
+      setPageCursorMap({ 1: { startAfter: null, startAfterId: null } });
+      setCurrentPage(1);
     } else {
-      setContacts((prev) => [...prev, ...data.contacts]);
-      setPage((prev) => prev + 1);
-      setTotalLoaded((prev) => prev + data.contacts.length);
+      setCurrentPage(pageNumber);
     }
 
+    setContacts(data.contacts || []);
     setPagination(data.nextPage || null);
+
+    if (reset && data.totalCount) {
+      setTotalCount(data.totalCount);
+    }
+
+    // Save cursor for NEXT page (pageNumber + 1)
+    if (data.nextPage && data.nextPage.startAfter && data.nextPage.startAfterId) {
+      setPageCursorMap((prev) => ({
+        ...prev,
+        [pageNumber + 1]: {
+          startAfter: data.nextPage.startAfter,
+          startAfterId: data.nextPage.startAfterId,
+        },
+      }));
+    }
+
     setLoading(false);
+  };
+
+  const totalPages = Math.ceil(totalCount / limit);
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      loadPage(currentPage + 1);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      loadPage(currentPage - 1);
+    }
   };
 
   const toggleSelectAll = () => {
@@ -72,6 +104,7 @@ export default function Home() {
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial' }}>
       <h1>🚀 Booster Shot Campaign Launcher</h1>
+
       {locationId ? (
         <>
           <p><strong>Subaccount ID:</strong> {locationId}</p>
@@ -126,22 +159,19 @@ export default function Home() {
             </div>
           ))}
 
-          {pagination && (
-            <button
-              onClick={() => fetchContacts({
-                startAfter: pagination.startAfter,
-                startAfterId: pagination.startAfterId,
-              })}
-              disabled={loading}
-              style={{ marginTop: '10px', padding: '8px 16px', background: '#0070f3', color: '#fff', border: 'none', borderRadius: '4px' }}
-            >
-              {loading ? 'Loading...' : 'Load More'}
+          <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <button onClick={handlePreviousPage} disabled={currentPage === 1 || loading}>
+              Previous
             </button>
-          )}
 
-          <div style={{ marginTop: '8px' }}>
-            Page {page} | Loaded {totalLoaded} contact(s)
+            <div>Page {currentPage} of {totalPages || '...'}</div>
+
+            <button onClick={handleNextPage} disabled={currentPage === totalPages || loading || !pagination}>
+              Next
+            </button>
           </div>
+
+          {loading && <div style={{ marginTop: '8px' }}>Loading...</div>}
         </>
       ) : (
         <p>Loading subaccount ID...</p>
