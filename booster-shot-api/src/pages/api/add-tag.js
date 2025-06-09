@@ -7,7 +7,10 @@ export default async function handler(req, res) {
 
   const { contactId, tagName } = req.body;
 
+  console.log('Add tag request body:', req.body); // Log incoming request body
+
   if (!contactId || !tagName) {
+    console.error('Missing contactId or tagName:', { contactId, tagName });
     return res.status(400).json({ error: 'Missing contactId or tagName' });
   }
 
@@ -21,7 +24,7 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${process.env.GHL_API_KEY}`, // Place your GHL API key in .env.local
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ tag: tagName })
+      body: JSON.stringify({ tag: tagName }),
     });
 
     const data = await response.json();
