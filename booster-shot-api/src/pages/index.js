@@ -5,14 +5,11 @@ export default function Home() {
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedContacts, setSelectedContacts] = useState(new Set());
-  const [limit, setLimit] = useState(100);
+  const [limit, setLimit] = useState(20);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-
-  // Map to store pagination cursors for each page
-  const [pageCursorMap, setPageCursorMap] = useState({
-    1: { startAfter: null, startAfterId: null },
-  });
+  const [pageCursors, setPageCursors] = useState({ 1: { startAfter: null, startAfterId: null } });
+  const [hasNextPage, setHasNextPage] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -20,21 +17,18 @@ export default function Home() {
     setLocationId(locId);
   }, []);
 
-  // Load first page or reload when locationId or limit changes
   useEffect(() => {
     if (locationId) {
-      // Reset cursor map to start fresh
-      setPageCursorMap({ 1: { startAfter: null, startAfterId: null } });
+      // Reset pagination on locationId or limit change
+      setPageCursors({ 1: { startAfter: null, startAfterId: null } });
       loadPage(1);
     }
   }, [locationId, limit]);
 
   const loadPage = async (pageNumber) => {
-    const cursor = pageCursorMap[pageNumber] || { startAfter: null, startAfterId: null };
-
+    const cursor = pageCursors[pageNumber] || { startAfter: null, startAfterId: null };
     setLoading(true);
 
-    // Prepare query parameters
     const params = new URLSearchParams({
       locationId,
       limit,
@@ -49,20 +43,23 @@ export default function Home() {
       if (res.ok) {
         setContacts(data.contacts || []);
         setTotalCount(data.total || 0);
+        setCurrentPage(pageNumber);
 
-        // Store cursor for next page if available
+        // Check if there is another page
         if (data.nextPage && data.nextPage.startAfter && data.nextPage.startAfterId) {
-          setPageCursorMap((prev) => ({
+          setPageCursors((prev) => ({
             ...prev,
             [pageNumber + 1]: {
               startAfter: data.nextPage.startAfter,
               startAfterId: data.nextPage.startAfterId,
             },
           }));
+          setHasNextPage(true);
+        } else {
+          setHasNextPage(false);
         }
 
-        setCurrentPage(pageNumber);
-        setSelectedContacts(new Set()); // Clear selections when page changes
+        setSelectedContacts(new Set());
       } else {
         alert('Failed to load contacts: ' + (data.error || 'Unknown error'));
       }
@@ -73,10 +70,8 @@ export default function Home() {
     setLoading(false);
   };
 
-  const totalPages = Math.ceil(totalCount / limit);
-
   const handleNextPage = () => {
-    if (currentPage < totalPages) {
+    if (hasNextPage) {
       loadPage(currentPage + 1);
     }
   };
@@ -89,19 +84,18 @@ export default function Home() {
 
   const toggleSelectAll = () => {
     if (selectedContacts.size < contacts.length) {
-      const newSet = new Set(contacts.map((c) => c.id));
-      setSelectedContacts(newSet);
+      setSelectedContacts(new Set(contacts.map((c) => c.id)));
     } else {
       setSelectedContacts(new Set());
     }
   };
 
-  const toggleSelectContact = (contactId) => {
+  const toggleSelectContact = (id) => {
     const newSet = new Set(selectedContacts);
-    if (newSet.has(contactId)) {
-      newSet.delete(contactId);
+    if (newSet.has(id)) {
+      newSet.delete(id);
     } else {
-      newSet.add(contactId);
+      newSet.add(id);
     }
     setSelectedContacts(newSet);
   };
@@ -113,16 +107,6 @@ export default function Home() {
       {locationId ? (
         <>
           <p><strong>Subaccount ID:</strong> {locationId}</p>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-            <h2>SMS/Text</h2>
-            <button
-              onClick={() => alert(`Launching campaign with ${selectedContacts.size} contact(s)`)}
-              style={{ padding: '8px 16px', background: '#0070f3', color: '#fff', border: 'none', borderRadius: '4px' }}
-            >
-              Launch Campaign
-            </button>
-          </div>
 
           <textarea
             placeholder="Type your SMS/Text here..."
@@ -168,10 +152,8 @@ export default function Home() {
             <button onClick={handlePreviousPage} disabled={currentPage === 1 || loading}>
               Previous
             </button>
-
-            <div>Page {currentPage} of {totalPages || '...'}</div>
-
-            <button onClick={handleNextPage} disabled={currentPage === totalPages || loading || !pageCursorMap[currentPage + 1]}>
+            <div>Page {currentPage}</div>
+            <button onClick={handleNextPage} disabled={!hasNextPage || loading}>
               Next
             </button>
           </div>
