@@ -8,8 +8,8 @@ export default function Home() {
   const [limit, setLimit] = useState(20);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [pageCursors, setPageCursors] = useState({ 1: { startAfter: null, startAfterId: null } });
-  const [hasNextPage, setHasNextPage] = useState(false);
+  const [nextPageUrl, setNextPageUrl] = useState(null);
+  const [prevPages, setPrevPages] = useState([]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -19,44 +19,32 @@ export default function Home() {
 
   useEffect(() => {
     if (locationId) {
-      // Reset pagination on locationId or limit change
-      setPageCursors({ 1: { startAfter: null, startAfterId: null } });
-      loadPage(1);
+      setPrevPages([]);           // Reset history on locationId or limit change
+      loadPage(buildInitialUrl(locationId, limit), 1, true);
     }
   }, [locationId, limit]);
 
-  const loadPage = async (pageNumber) => {
-    const cursor = pageCursors[pageNumber] || { startAfter: null, startAfterId: null };
+  const buildInitialUrl = (locId, limit) => {
+    return `/api/get-contacts?locationId=${locId}&limit=${limit}`;
+  };
+
+  const loadPage = async (url, pageNumber, resetHistory = false) => {
     setLoading(true);
 
-    const params = new URLSearchParams({
-      locationId,
-      limit,
-    });
-    if (cursor.startAfter) params.append('startAfter', cursor.startAfter);
-    if (cursor.startAfterId) params.append('startAfterId', cursor.startAfterId);
-
     try {
-      const res = await fetch(`/api/get-contacts?${params.toString()}`);
+      const res = await fetch(url);
       const data = await res.json();
 
       if (res.ok) {
         setContacts(data.contacts || []);
         setTotalCount(data.total || 0);
         setCurrentPage(pageNumber);
+        setNextPageUrl(data.meta?.nextPageUrl || null);
 
-        // Check if there is another page
-        if (data.nextPage && data.nextPage.startAfter && data.nextPage.startAfterId) {
-          setPageCursors((prev) => ({
-            ...prev,
-            [pageNumber + 1]: {
-              startAfter: data.nextPage.startAfter,
-              startAfterId: data.nextPage.startAfterId,
-            },
-          }));
-          setHasNextPage(true);
-        } else {
-          setHasNextPage(false);
+        if (resetHistory) {
+          setPrevPages([]);
+        } else if (pageNumber > prevPages.length + 1) {
+          setPrevPages((prev) => [...prev, url]);
         }
 
         setSelectedContacts(new Set());
@@ -71,14 +59,15 @@ export default function Home() {
   };
 
   const handleNextPage = () => {
-    if (hasNextPage) {
-      loadPage(currentPage + 1);
+    if (nextPageUrl) {
+      loadPage(nextPageUrl, currentPage + 1);
     }
   };
 
   const handlePreviousPage = () => {
-    if (currentPage > 1) {
-      loadPage(currentPage - 1);
+    if (currentPage > 1 && prevPages[currentPage - 2]) {
+      loadPage(prevPages[currentPage - 2], currentPage - 1);
+      setPrevPages((prev) => prev.slice(0, currentPage - 2));
     }
   };
 
@@ -153,7 +142,7 @@ export default function Home() {
               Previous
             </button>
             <div>Page {currentPage}</div>
-            <button onClick={handleNextPage} disabled={!hasNextPage || loading}>
+            <button onClick={handleNextPage} disabled={!nextPageUrl || loading}>
               Next
             </button>
           </div>
