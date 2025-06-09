@@ -33,19 +33,24 @@ export default async function handler(req, res) {
       return res.status(response.status).json({ error: errorData });
     }
 
-	return res.status(200).json({
-  contacts: data.contacts || [],
-  pagination: {  // Make sure this matches what you check in the frontend
-    nextPageUrl: data.pagination?.startAfter && data.pagination?.startAfterId
-      ? `/api/get-contacts?locationId=${locationId}&limit=${limit}&startAfter=${data.pagination.startAfter}&startAfterId=${data.pagination.startAfterId}`
-      : null,
-    total: data.meta?.total || data.total || 0,
-  }
-});
+    const data = await response.json();
+    console.log('GHL API Response:', data); // Debug log
 
+    // Build next page URL if more contacts exist
+    const hasMore = data.contacts?.length >= limit;
+    const nextPageUrl = hasMore && data.pagination?.startAfter && data.pagination?.startAfterId
+      ? `/api/get-contacts?locationId=${locationId}&limit=${limit}&startAfter=${data.pagination.startAfter}&startAfterId=${data.pagination.startAfterId}`
+      : null;
+
+    return res.status(200).json({
+      contacts: data.contacts || [],
+      pagination: {
+        nextPageUrl,
+        total: data.meta?.total || data.total || 0,
+      }
+    });
   } catch (error) {
-    console.error(error);
+    console.error('API Error:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
   }
-console.log('Next page URL:', data.pagination?.nextPageUrl);
 }

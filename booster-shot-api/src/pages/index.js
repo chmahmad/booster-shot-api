@@ -19,45 +19,48 @@ export default function Home() {
 
   useEffect(() => {
     if (locationId) {
-      setPrevPages([]);           // Reset history on locationId or limit change
+      setPrevPages([]);
       loadPage(buildInitialUrl(locationId, limit), 1, true);
     }
   }, [locationId, limit]);
 
- const buildInitialUrl = (locId, limit) => {
-  return `/api/get-contacts?locationId=${locId}&limit=${limit}`;
-};
+  const buildInitialUrl = (locId, limit) => {
+    return `/api/get-contacts?locationId=${locId}&limit=${limit}`;
+  };
 
-const loadPage = async (url, pageNumber, resetHistory = false) => {
-  setLoading(true);
+  const loadPage = async (url, pageNumber, resetHistory = false) => {
+    setLoading(true);
+    console.log('Loading page:', url);
 
-  try {
-    const res = await fetch(url);
-    const data = await res.json();
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      console.log('API Response:', data);
 
-    if (res.ok) {
-      setContacts(data.contacts || []);
-      setTotalCount(data.pagination?.total || 0);
-      setCurrentPage(pageNumber);
-      // Use the correct path to nextPageUrl
-      setNextPageUrl(data.pagination?.nextPageUrl || null);
+      if (res.ok) {
+        setContacts(data.contacts || []);
+        setTotalCount(data.pagination?.total || 0);
+        setCurrentPage(pageNumber);
+        setNextPageUrl(data.pagination?.nextPageUrl || null);
 
-      if (resetHistory) {
-        setPrevPages([]);
-      } else if (pageNumber > prevPages.length + 1) {
-        setPrevPages((prev) => [...prev, url]);
+        if (resetHistory) {
+          setPrevPages([]);
+        } else if (pageNumber > prevPages.length + 1) {
+          setPrevPages((prev) => [...prev, url]);
+        }
+
+        setSelectedContacts(new Set());
+      } else {
+        console.error('API Error:', data.error);
+        alert('Failed to load contacts: ' + (data.error || 'Unknown error'));
       }
-
-      setSelectedContacts(new Set());
-    } else {
-      alert('Failed to load contacts: ' + (data.error || 'Unknown error'));
+    } catch (error) {
+      console.error('Fetch Error:', error);
+      alert('Error fetching contacts: ' + error.message);
     }
-  } catch (error) {
-    alert('Error fetching contacts: ' + error.message);
-  }
 
-  setLoading(false);
-};
+    setLoading(false);
+  };
 
   const handleNextPage = () => {
     if (nextPageUrl) {
@@ -107,53 +110,72 @@ const loadPage = async (url, pageNumber, resetHistory = false) => {
 
           <div style={{ marginBottom: '10px' }}>
             <label>Show </label>
-            <select value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
+            <select 
+              value={limit} 
+              onChange={(e) => setLimit(Number(e.target.value))}
+              disabled={loading}
+            >
               <option value={20}>20</option>
               <option value={50}>50</option>
               <option value={100}>100</option>
             </select>
             <label> contacts per page</label>
+            <span style={{ marginLeft: '20px' }}>Total: {totalCount}</span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-            <button onClick={toggleSelectAll}>
+            <button onClick={toggleSelectAll} disabled={loading}>
               {selectedContacts.size < contacts.length ? 'Select All' : 'Unselect All'}
             </button>
             <div>Selected: {selectedContacts.size}</div>
           </div>
 
-          {contacts.map((contact) => (
-            <div key={contact.id} style={{ borderBottom: '1px solid #ddd', padding: '5px 0', display: 'flex', alignItems: 'center' }}>
-              <input
-                type="checkbox"
-                checked={selectedContacts.has(contact.id)}
-                onChange={() => toggleSelectContact(contact.id)}
-                style={{ marginRight: '10px' }}
-              />
-              <div>
-                <div><strong>{contact.firstName || ''} {contact.lastName || ''}</strong></div>
-                <div>{contact.email || ''}</div>
-                <div>{contact.phone || ''}</div>
+          {contacts.length > 0 ? (
+            <>
+              {contacts.map((contact) => (
+                <div key={contact.id} style={{ borderBottom: '1px solid #ddd', padding: '5px 0', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedContacts.has(contact.id)}
+                    onChange={() => toggleSelectContact(contact.id)}
+                    style={{ marginRight: '10px' }}
+                    disabled={loading}
+                  />
+                  <div>
+                    <div><strong>{contact.firstName || ''} {contact.lastName || ''}</strong></div>
+                    <div>{contact.email || ''}</div>
+                    <div>{contact.phone || ''}</div>
+                  </div>
+                </div>
+              ))}
+
+              <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <button 
+                  onClick={handlePreviousPage} 
+                  disabled={currentPage === 1 || loading}
+                >
+                  Previous
+                </button>
+                <div>Page {currentPage} of {Math.ceil(totalCount / limit)}</div>
+                <button 
+                  onClick={handleNextPage} 
+                  disabled={!nextPageUrl || loading}
+                >
+                  Next
+                </button>
               </div>
+            </>
+          ) : (
+            <div style={{ padding: '20px', textAlign: 'center' }}>
+              {loading ? 'Loading contacts...' : 'No contacts found'}
             </div>
-          ))}
+          )}
 
-          <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <button onClick={handlePreviousPage} disabled={currentPage === 1 || loading}>
-              Previous
-            </button>
-            <div>Page {currentPage}</div>
-            <button onClick={handleNextPage} disabled={!nextPageUrl || loading}>
-              Next
-            </button>
-          </div>
-
-          {loading && <div style={{ marginTop: '8px' }}>Loading...</div>}
+          {loading && <div style={{ marginTop: '8px', textAlign: 'center' }}>Loading...</div>}
         </>
       ) : (
         <p>Loading subaccount ID...</p>
       )}
     </div>
-console.log('Next page URL in frontend:', nextPageUrl);
   );
 }
