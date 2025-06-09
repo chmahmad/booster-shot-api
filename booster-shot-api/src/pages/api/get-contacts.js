@@ -33,20 +33,19 @@ export default async function handler(req, res) {
       return res.status(response.status).json({ error: errorData });
     }
 
-    const data = await response.json();
+	return res.status(200).json({
+  contacts: data.contacts || [],
+  pagination: {  // Make sure this matches what you check in the frontend
+    nextPageUrl: data.pagination?.startAfter && data.pagination?.startAfterId
+      ? `/api/get-contacts?locationId=${locationId}&limit=${limit}&startAfter=${data.pagination.startAfter}&startAfterId=${data.pagination.startAfterId}`
+      : null,
+    total: data.meta?.total || data.total || 0,
+  }
+});
 
-    return res.status(200).json({
-      contacts: data.contacts || [],
-      nextPage: data.pagination?.startAfter && data.pagination?.startAfterId
-        ? {
-            startAfter: data.pagination.startAfter,
-            startAfterId: data.pagination.startAfterId,
-          }
-        : null,
-      total: data.meta?.total || data.total || 0,
-    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Internal Server Error' });
   }
+console.log('Next page URL:', data.pagination?.nextPageUrl);
 }

@@ -24,39 +24,40 @@ export default function Home() {
     }
   }, [locationId, limit]);
 
-  const buildInitialUrl = (locId, limit) => {
-    return `/api/get-contacts?locationId=${locId}&limit=${limit}`;
-  };
+ const buildInitialUrl = (locId, limit) => {
+  return `/api/get-contacts?locationId=${locId}&limit=${limit}`;
+};
 
-  const loadPage = async (url, pageNumber, resetHistory = false) => {
-    setLoading(true);
+const loadPage = async (url, pageNumber, resetHistory = false) => {
+  setLoading(true);
 
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
 
-      if (res.ok) {
-        setContacts(data.contacts || []);
-        setTotalCount(data.total || 0);
-        setCurrentPage(pageNumber);
-        setNextPageUrl(data.meta?.nextPageUrl || null);
+    if (res.ok) {
+      setContacts(data.contacts || []);
+      setTotalCount(data.pagination?.total || 0);
+      setCurrentPage(pageNumber);
+      // Use the correct path to nextPageUrl
+      setNextPageUrl(data.pagination?.nextPageUrl || null);
 
-        if (resetHistory) {
-          setPrevPages([]);
-        } else if (pageNumber > prevPages.length + 1) {
-          setPrevPages((prev) => [...prev, url]);
-        }
-
-        setSelectedContacts(new Set());
-      } else {
-        alert('Failed to load contacts: ' + (data.error || 'Unknown error'));
+      if (resetHistory) {
+        setPrevPages([]);
+      } else if (pageNumber > prevPages.length + 1) {
+        setPrevPages((prev) => [...prev, url]);
       }
-    } catch (error) {
-      alert('Error fetching contacts: ' + error.message);
-    }
 
-    setLoading(false);
-  };
+      setSelectedContacts(new Set());
+    } else {
+      alert('Failed to load contacts: ' + (data.error || 'Unknown error'));
+    }
+  } catch (error) {
+    alert('Error fetching contacts: ' + error.message);
+  }
+
+  setLoading(false);
+};
 
   const handleNextPage = () => {
     if (nextPageUrl) {
@@ -153,5 +154,6 @@ export default function Home() {
         <p>Loading subaccount ID...</p>
       )}
     </div>
+console.log('Next page URL in frontend:', nextPageUrl);
   );
 }
