@@ -1,14 +1,10 @@
-console.log("Hello from index.js");
-
 import { useEffect, useState } from 'react';
 
 export default function Home() {
   const [locationId, setLocationId] = useState(null);
-  const [showContacts, setShowContacts] = useState(false);
   const [contacts, setContacts] = useState([]);
-  const [selectedContacts, setSelectedContacts] = useState(new Set());
-  const [selectAll, setSelectAll] = useState(false);
-  const [smsText, setSmsText] = useState('');
+  const [pageSize, setPageSize] = useState(20); // default to 20
+  const [loadingContacts, setLoadingContacts] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -16,128 +12,64 @@ export default function Home() {
     setLocationId(locId);
   }, []);
 
-  // Mock fetch contacts function - replace with your real API call
-  async function fetchContacts() {
-    // Example fetch call: replace with your API endpoint
-    const response = await fetch('/api/get-contacts');
-    if (response.ok) {
+  useEffect(() => {
+    if (locationId) fetchContacts(); // fetch when locationId is set
+  }, [locationId, pageSize]);
+
+  const fetchContacts = async () => {
+    setLoadingContacts(true);
+    try {
+      const response = await fetch(`/api/get-contacts?limit=${pageSize}&location_id=${locationId}`);
       const data = await response.json();
-      return data.contacts || [];
+      setContacts(data.contacts || []);
+    } catch (err) {
+      console.error('Error fetching contacts', err);
+      setContacts([]);
     }
-    return [];
-  }
-
-  async function handleLoadContacts() {
-    if (!showContacts) {
-      const fetchedContacts = await fetchContacts();
-      setContacts(fetchedContacts);
-      setShowContacts(true);
-    } else {
-      setShowContacts(false);
-    }
-  }
-
-  function toggleSelectAll() {
-    if (selectAll) {
-      setSelectedContacts(new Set());
-      setSelectAll(false);
-    } else {
-      const allIds = new Set(contacts.map(c => c.id));
-      setSelectedContacts(allIds);
-      setSelectAll(true);
-    }
-  }
-
-  function toggleContactSelection(contactId) {
-    const newSelected = new Set(selectedContacts);
-    if (newSelected.has(contactId)) {
-      newSelected.delete(contactId);
-    } else {
-      newSelected.add(contactId);
-    }
-    setSelectedContacts(newSelected);
-    setSelectAll(newSelected.size === contacts.length);
-  }
-
-  function handleLaunchCampaign() {
-    alert(`Launching campaign with ${selectedContacts.size} contacts.\nMessage: ${smsText}`);
-    // TODO: Implement campaign launch logic here
-  }
+    setLoadingContacts(false);
+  };
 
   return (
-    <div style={{ padding: 20, fontFamily: 'Arial' }}>
+    <div style={{ padding: '20px', fontFamily: 'Arial' }}>
       <h1>🚀 Booster Shot Campaign Launcher</h1>
+
       {locationId ? (
         <>
           <p><strong>Subaccount ID:</strong> {locationId}</p>
-          
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
-            <label htmlFor="smsText" style={{ flexGrow: 1 }}>
-              <strong>SMS/Text</strong><br />
-              <textarea
-                id="smsText"
-                rows={4}
-                style={{ width: '100%', fontSize: 16 }}
-                value={smsText}
-                onChange={(e) => setSmsText(e.target.value)}
-              />
-            </label>
-            <button
-              onClick={handleLaunchCampaign}
-              style={{ marginLeft: 20, padding: '10px 20px', fontSize: 16, height: 90, alignSelf: 'flex-start' }}
-            >
-              Launch Campaign
-            </button>
+
+          <div style={{ marginBottom: '20px' }}>
+            <label htmlFor="messageBox" style={{ fontWeight: 'bold' }}>SMS/Text</label>
+            <textarea id="messageBox" rows={4} style={{ width: '100%', marginTop: '8px' }} />
+            <button style={{ float: 'right', marginTop: '8px' }}>Launch Campaign</button>
           </div>
 
-          <div>
-            <button 
-              onClick={handleLoadContacts} 
-              style={{ 
-                background: 'none', 
-                border: 'none', 
-                color: 'blue', 
-                textDecoration: 'underline', 
-                cursor: 'pointer', 
-                fontSize: 18,
-                marginBottom: 10
-              }}
+          <div style={{ marginTop: '20px' }}>
+            <h3>Select Campaign Contacts</h3>
+
+            <label htmlFor="pageSize" style={{ marginRight: '8px' }}>Show</label>
+            <select
+              id="pageSize"
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              style={{ marginBottom: '10px' }}
             >
-              Select Campaign Contacts
-            </button>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
 
-            {showContacts && (
-              <div style={{ border: '1px solid #ddd', padding: 10, maxHeight: 400, overflowY: 'auto' }}>
-                <div style={{ marginBottom: 10 }}>
-                  <input
-                    type="checkbox"
-                    checked={selectAll}
-                    onChange={toggleSelectAll}
-                    id="selectAllCheckbox"
-                  />
-                  <label htmlFor="selectAllCheckbox" style={{ marginLeft: 8, fontWeight: 'bold' }}>
-                    Select All
-                  </label>
-                </div>
-
-                {contacts.length === 0 ? (
-                  <p>No contacts found.</p>
-                ) : (
-                  contacts.map(contact => (
-                    <div key={contact.id} style={{ marginBottom: 8, display: 'flex', alignItems: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedContacts.has(contact.id)}
-                        onChange={() => toggleContactSelection(contact.id)}
-                        id={`contact_${contact.id}`}
-                      />
-                      <label htmlFor={`contact_${contact.id}`} style={{ marginLeft: 8 }}>
-                        {contact.name || 'No Name'} — {contact.email || 'No Email'} — {contact.phone || 'No Phone'}
-                      </label>
-                    </div>
-                  ))
-                )}
-              </div>
+            {loadingContacts ? (
+              <p>Loading contacts...</p>
+            ) : (
+              <>
+                <button style={{ marginBottom: '10px' }}>Select All</button>
+                {contacts.map((contact) => (
+                  <div key={contact.id} style={{ border: '1px solid #ccc', padding: '8px', marginBottom: '4px' }}>
+                    <input type="checkbox" style={{ marginRight: '8px' }} />
+                    {contact.name} — {contact.email} — {contact.phone}
+                  </div>
+                ))}
+              </>
             )}
           </div>
         </>
