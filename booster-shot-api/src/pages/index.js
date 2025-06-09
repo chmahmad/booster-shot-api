@@ -3,11 +3,12 @@ import { useEffect, useState } from 'react';
 export default function Home() {
   const [locationId, setLocationId] = useState(null);
   const [contacts, setContacts] = useState([]);
-  const [selectedContacts, setSelectedContacts] = useState([]);
-  const [limit, setLimit] = useState(20);
+  const [pagination, setPagination] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [selectedContacts, setSelectedContacts] = useState(new Set());
+  const [limit, setLimit] = useState(100);
   const [page, setPage] = useState(1);
-  const [totalContacts, setTotalContacts] = useState(0);
-  const [loadingContacts, setLoadingContacts] = useState(false);
+  const [totalLoaded, setTotalLoaded] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -15,111 +16,132 @@ export default function Home() {
     setLocationId(locId);
   }, []);
 
-  const fetchContacts = async (pageNumber = 1) => {
-    if (!locationId) return;
-    setLoadingContacts(true);
-    try {
-      const offset = (pageNumber - 1) * limit;
-      const response = await fetch(`/api/get-contacts?location_id=${locationId}&limit=${limit}&offset=${offset}`);
-      const data = await response.json();
-      setContacts(data.contacts || []);
-      setTotalContacts(data.total || 0); // Make sure your API returns total count of contacts
-      setSelectedContacts([]);
-      setPage(pageNumber);
-    } catch (err) {
-      console.error(err);
-      alert('Error fetching contacts');
-    } finally {
-      setLoadingContacts(false);
+  useEffect(() => {
+    if (locationId) {
+      fetchContacts({ reset: true });
     }
-  };
+  }, [locationId, limit]);
 
-  const toggleContactSelection = (contactId) => {
-    setSelectedContacts((prev) =>
-      prev.includes(contactId)
-        ? prev.filter((id) => id !== contactId)
-        : [...prev, contactId]
-    );
+  const fetchContacts = async ({ startAfter = null, startAfterId = null, reset = false } = {}) => {
+    setLoading(true);
+
+    const query = new URLSearchParams({
+      locationId,
+      limit,
+    });
+
+    if (startAfter) query.append('startAfter', startAfter);
+    if (startAfterId) query.append('startAfterId', startAfterId);
+
+    const res = await fetch(`/api/get-contacts?${query.toString()}`);
+    const data = await res.json();
+
+    if (reset) {
+      setContacts(data.contacts);
+      setPage(1);
+      setTotalLoaded(data.contacts.length);
+    } else {
+      setContacts((prev) => [...prev, ...data.contacts]);
+      setPage((prev) => prev + 1);
+      setTotalLoaded((prev) => prev + data.contacts.length);
+    }
+
+    setPagination(data.nextPage || null);
+    setLoading(false);
   };
 
   const toggleSelectAll = () => {
-    if (selectedContacts.length === contacts.length) {
-      setSelectedContacts([]);
+    if (selectedContacts.size < contacts.length) {
+      const newSet = new Set(contacts.map((c) => c.id));
+      setSelectedContacts(newSet);
     } else {
-      setSelectedContacts(contacts.map((contact) => contact.id));
+      setSelectedContacts(new Set());
     }
   };
 
-  const totalPages = Math.ceil(totalContacts / limit);
+  const toggleSelectContact = (contactId) => {
+    const newSet = new Set(selectedContacts);
+    if (newSet.has(contactId)) {
+      newSet.delete(contactId);
+    } else {
+      newSet.add(contactId);
+    }
+    setSelectedContacts(newSet);
+  };
 
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial' }}>
       <h1>🚀 Booster Shot Campaign Launcher</h1>
-
       {locationId ? (
         <>
           <p><strong>Subaccount ID:</strong> {locationId}</p>
 
-          <div style={{ marginBottom: '20px' }}>
-            <label><strong>Sms/Text:</strong></label><br />
-            <textarea rows="4" cols="50" placeholder="Type your SMS message here..." style={{ width: '100%', padding: '8px', fontSize: '14px' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <h2>SMS/Text</h2>
             <button
-              style={{ marginTop: '10px', float: 'right', padding: '8px 16px', fontSize: '14px' }}
-              onClick={() => alert('Launch Campaign')}
+              onClick={() => alert(`Launching campaign with ${selectedContacts.size} contact(s)`)}
+              style={{ padding: '8px 16px', background: '#0070f3', color: '#fff', border: 'none', borderRadius: '4px' }}
             >
-              🚀 Launch Campaign
+              Launch Campaign
             </button>
           </div>
 
-          <hr />
+          <textarea
+            placeholder="Type your SMS/Text here..."
+            style={{ width: '100%', height: '100px', marginBottom: '20px' }}
+          />
 
-          <div style={{ margin: '20px 0' }}>
-            <label htmlFor="limit"><strong>Show:</strong> </label>
-            <select id="limit" value={limit} onChange={(e) => setLimit(parseInt(e.target.value))} style={{ marginRight: '10px' }}>
+          <h3>Select Campaign Contacts</h3>
+
+          <div style={{ marginBottom: '10px' }}>
+            <label>Show </label>
+            <select value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
               <option value={20}>20</option>
               <option value={50}>50</option>
               <option value={100}>100</option>
             </select>
-            <button onClick={() => fetchContacts(1)} style={{ padding: '4px 12px', fontSize: '12px' }}>Load Contacts</button>
+            <label> contacts per page</label>
           </div>
 
-          {loadingContacts && <p>Loading contacts...</p>}
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+            <button onClick={toggleSelectAll}>
+              {selectedContacts.size < contacts.length ? 'Select All' : 'Unselect All'}
+            </button>
+            <div>Selected: {selectedContacts.size}</div>
+          </div>
 
-          {contacts.length > 0 && (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={selectedContacts.length === contacts.length}
-                    onChange={toggleSelectAll}
-                  /> Select All
-                </label>
-                <span>{selectedContacts.length} selected</span>
+          {contacts.map((contact) => (
+            <div key={contact.id} style={{ borderBottom: '1px solid #ddd', padding: '5px 0', display: 'flex', alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                checked={selectedContacts.has(contact.id)}
+                onChange={() => toggleSelectContact(contact.id)}
+                style={{ marginRight: '10px' }}
+              />
+              <div>
+                <div><strong>{contact.firstName || ''} {contact.lastName || ''}</strong></div>
+                <div>{contact.email || ''}</div>
+                <div>{contact.phone || ''}</div>
               </div>
+            </div>
+          ))}
 
-              <ul style={{ listStyle: 'none', padding: 0 }}>
-                {contacts.map((contact) => (
-                  <li key={contact.id} style={{ borderBottom: '1px solid #ccc', padding: '8px 0' }}>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={selectedContacts.includes(contact.id)}
-                        onChange={() => toggleContactSelection(contact.id)}
-                      />{' '}
-                      <strong>{contact.firstName || ''} {contact.lastName || ''}</strong> — {contact.email || ''} — {contact.phone || ''}
-                    </label>
-                  </li>
-                ))}
-              </ul>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
-                <button onClick={() => fetchContacts(page - 1)} disabled={page <= 1}>⬅ Previous</button>
-                <span>Page {page} of {totalPages}</span>
-                <button onClick={() => fetchContacts(page + 1)} disabled={page >= totalPages}>Next ➡</button>
-              </div>
-            </>
+          {pagination && (
+            <button
+              onClick={() => fetchContacts({
+                startAfter: pagination.startAfter,
+                startAfterId: pagination.startAfterId,
+              })}
+              disabled={loading}
+              style={{ marginTop: '10px', padding: '8px 16px', background: '#0070f3', color: '#fff', border: 'none', borderRadius: '4px' }}
+            >
+              {loading ? 'Loading...' : 'Load More'}
+            </button>
           )}
+
+          <div style={{ marginTop: '8px' }}>
+            Page {page} | Loaded {totalLoaded} contact(s)
+          </div>
         </>
       ) : (
         <p>Loading subaccount ID...</p>
