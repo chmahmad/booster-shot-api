@@ -11,8 +11,8 @@ export default function ContactList() {
   const [nextPageUrl, setNextPageUrl] = useState(null);
   const [prevPages, setPrevPages] = useState([]);
   const [contactsLoaded, setContactsLoaded] = useState(false);
-
   const [debugInfo, setDebugInfo] = useState({});
+  const [campaignLoading, setCampaignLoading] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -96,6 +96,42 @@ export default function ContactList() {
     }
   };
 
+  const handleLaunchCampaign = async () => {
+    if (selectedContacts.size === 0) {
+      alert('Please select at least one contact.');
+      return;
+    }
+
+    setCampaignLoading(true);
+    try {
+      const response = await fetch('/api/add-tag', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          locationId,
+          contactIds: Array.from(selectedContacts),
+          tag: 'Booster Shot'
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert('🎉 Booster Shot tag added successfully to selected contacts!');
+        setSelectedContacts(new Set());
+      } else {
+        alert(`❗ Error adding tag: ${result.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('❗ Network or server error occurred.');
+    } finally {
+      setCampaignLoading(false);
+    }
+  };
+
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial' }}>
       <h1>🚀 Booster Shot Campaign Launcher</h1>
@@ -135,27 +171,47 @@ export default function ContactList() {
                 borderRadius: '4px'
               }}>
                 <h4>Debug Info:</h4>
-                <pre>
-                  {JSON.stringify({
-                    currentPage,
-                    totalCount,
-                    hasNextPage: !!nextPageUrl,
-                    nextPageUrlSnippet: nextPageUrl?.split('startAfter=')[1]?.substring(0, 20),
-                    loading
-                  }, null, 2)}
-                </pre>
+                <pre>{JSON.stringify({
+                  currentPage,
+                  totalCount,
+                  hasNextPage: !!nextPageUrl,
+                  nextPageUrlSnippet: nextPageUrl?.split('startAfter=')[1]?.substring(0, 20),
+                  loading
+                }, null, 2)}</pre>
               </div>
 
               <h3>Campaign Contacts</h3>
 
-              <div style={{ marginBottom: '10px' }}>
-                <label>Show </label>
-                <select value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-                <label> contacts per page</label>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '10px'
+              }}>
+                <div>
+                  <label>Show </label>
+                  <select value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  <label> contacts per page</label>
+                </div>
+
+                <button
+                  onClick={handleLaunchCampaign}
+                  disabled={campaignLoading || selectedContacts.size === 0}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#28a745',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: selectedContacts.size > 0 ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  {campaignLoading ? 'Launching...' : '🎯 Launch Campaign'}
+                </button>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
