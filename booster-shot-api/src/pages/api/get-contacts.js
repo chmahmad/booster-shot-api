@@ -15,13 +15,12 @@ export default async function handler(req, res) {
 
   try {
     const url = new URL('https://rest.gohighlevel.com/v1/contacts');
-
+    url.searchParams.append('limit', limit);
     if (locationId) url.searchParams.append('locationId', locationId);
-    if (limit) url.searchParams.append('limit', limit);
     if (startAfter) url.searchParams.append('startAfter', startAfter);
     if (startAfterId) url.searchParams.append('startAfterId', startAfterId);
 
-    const response = await fetch(url.toString(), {
+    const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${API_TOKEN}`,
         'Content-Type': 'application/json',
@@ -30,27 +29,34 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errorData = await response.json();
-      return res.status(response.status).json({ error: errorData });
+      console.error('GHL API Error:', errorData);
+      return res.status(response.status).json({ error: errorData.message || 'API Error' });
     }
 
     const data = await response.json();
-    console.log('GHL API Response:', data); // Debug log
+    console.log('GHL API Data:', { 
+      contactsCount: data.contacts?.length,
+      pagination: data.pagination 
+    });
 
-    // Build next page URL if more contacts exist
-    const hasMore = data.contacts?.length >= limit;
-    const nextPageUrl = hasMore && data.pagination?.startAfter && data.pagination?.startAfterId
-      ? `/api/get-contacts?locationId=${locationId}&limit=${limit}&startAfter=${data.pagination.startAfter}&startAfterId=${data.pagination.startAfterId}`
-      : null;
+    // Determine if more contacts exist
+    const hasMore = data.contacts?.length >= limit && 
+                   data.pagination?.startAfter && 
+                   data.pagination?.startAfterId;
 
     return res.status(200).json({
       contacts: data.contacts || [],
       pagination: {
-        nextPageUrl,
+        nextPageUrl: hasMore
+          ? `/api/get-contacts?locationId=${locationId}&limit=${limit}&startAfter=${data.pagination.startAfter}&startAfterId=${data.pagination.startAfterId}`
+          : null,
         total: data.meta?.total || data.total || 0,
+        hasMore // For debugging
       }
     });
+
   } catch (error) {
-    console.error('API Error:', error);
+    console.error('Server Error:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 }
