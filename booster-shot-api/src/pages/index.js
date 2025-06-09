@@ -112,7 +112,7 @@ export default function ContactList() {
         body: JSON.stringify({
           locationId,
           contactIds: Array.from(selectedContacts),
-          tag: 'Booster Shot'
+          tag: 'booster shot'
         })
       });
 
