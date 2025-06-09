@@ -25,8 +25,11 @@ export default function ContactList() {
     }
   }, [locationId, limit]);
 
+  // ✅ Updated loadPage function with hasMore check
   const loadPage = async (url, pageNumber, resetHistory = false) => {
     setLoading(true);
+    console.log('Loading:', url);
+
     try {
       const res = await fetch(url);
       const data = await res.json();
@@ -35,7 +38,8 @@ export default function ContactList() {
         lastRequest: url,
         response: {
           contactsCount: data.contacts?.length,
-          pagination: data.pagination
+          pagination: data.pagination,
+          hasMore: data.pagination?.hasMore
         }
       });
 
@@ -43,7 +47,9 @@ export default function ContactList() {
         setContacts(data.contacts || []);
         setTotalCount(data.pagination?.total || 0);
         setCurrentPage(pageNumber);
-        setNextPageUrl(data.pagination?.nextPageUrl || null);
+
+        // ✅ Critical fix: only set nextPageUrl if hasMore is true
+        setNextPageUrl(data.pagination?.hasMore ? data.pagination.nextPageUrl : null);
 
         if (resetHistory) {
           setPrevPages([]);
@@ -56,7 +62,8 @@ export default function ContactList() {
         alert('API error: ' + (data.error?.message || 'Unknown error'));
       }
     } catch (error) {
-      alert('Network error: ' + error.message);
+      console.error('Fetch Error:', error);
+      alert('Network error occurred');
     } finally {
       setLoading(false);
     }
@@ -156,13 +163,21 @@ export default function ContactList() {
             </div>
           ))}
 
+          {/* ✅ Updated pagination with improved Next button */}
           <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <button onClick={handlePreviousPage} disabled={currentPage === 1 || loading}>
               Previous
             </button>
             <div>Page {currentPage} of {Math.ceil(totalCount / limit)}</div>
-            <button onClick={handleNextPage} disabled={!nextPageUrl || loading}>
-              Next
+            <button
+              onClick={handleNextPage}
+              disabled={!nextPageUrl || loading}
+              style={{
+                backgroundColor: nextPageUrl ? '#4CAF50' : '#cccccc',
+                cursor: nextPageUrl ? 'pointer' : 'not-allowed'
+              }}
+            >
+              Next {nextPageUrl && `(More available)`}
             </button>
           </div>
 
