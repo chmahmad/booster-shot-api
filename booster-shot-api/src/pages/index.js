@@ -1,4 +1,3 @@
-// src/pages/index.js
 import { useEffect, useState } from 'react';
 
 export default function Home() {
@@ -6,6 +5,8 @@ export default function Home() {
   const [contacts, setContacts] = useState([]);
   const [selectedContacts, setSelectedContacts] = useState([]);
   const [limit, setLimit] = useState(20);
+  const [page, setPage] = useState(1);
+  const [totalContacts, setTotalContacts] = useState(0);
   const [loadingContacts, setLoadingContacts] = useState(false);
 
   useEffect(() => {
@@ -14,14 +15,17 @@ export default function Home() {
     setLocationId(locId);
   }, []);
 
-  const fetchContacts = async () => {
+  const fetchContacts = async (pageNumber = 1) => {
     if (!locationId) return;
     setLoadingContacts(true);
     try {
-      const response = await fetch(`/api/get-contacts?location_id=${locationId}&limit=${limit}`);
+      const offset = (pageNumber - 1) * limit;
+      const response = await fetch(`/api/get-contacts?location_id=${locationId}&limit=${limit}&offset=${offset}`);
       const data = await response.json();
       setContacts(data.contacts || []);
-      setSelectedContacts([]); // Reset selected when fetching new
+      setTotalContacts(data.total || 0); // Make sure your API returns total count of contacts
+      setSelectedContacts([]);
+      setPage(pageNumber);
     } catch (err) {
       console.error(err);
       alert('Error fetching contacts');
@@ -40,15 +44,18 @@ export default function Home() {
 
   const toggleSelectAll = () => {
     if (selectedContacts.length === contacts.length) {
-      setSelectedContacts([]); // Deselect all
+      setSelectedContacts([]);
     } else {
-      setSelectedContacts(contacts.map((contact) => contact.id)); // Select all
+      setSelectedContacts(contacts.map((contact) => contact.id));
     }
   };
+
+  const totalPages = Math.ceil(totalContacts / limit);
 
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial' }}>
       <h1>🚀 Booster Shot Campaign Launcher</h1>
+
       {locationId ? (
         <>
           <p><strong>Subaccount ID:</strong> {locationId}</p>
@@ -67,27 +74,19 @@ export default function Home() {
           <hr />
 
           <div style={{ margin: '20px 0' }}>
-            <button onClick={fetchContacts} style={{ padding: '8px 16px' }}>
-              Select Campaign Contacts
-            </button>
-
-            {contacts.length > 0 && (
-              <div style={{ marginTop: '10px' }}>
-                <label htmlFor="limit"><strong>Show:</strong> </label>
-                <select id="limit" value={limit} onChange={(e) => setLimit(parseInt(e.target.value))} style={{ marginRight: '10px' }}>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-                <button onClick={fetchContacts} style={{ padding: '4px 12px', fontSize: '12px' }}>Reload</button>
-              </div>
-            )}
+            <label htmlFor="limit"><strong>Show:</strong> </label>
+            <select id="limit" value={limit} onChange={(e) => setLimit(parseInt(e.target.value))} style={{ marginRight: '10px' }}>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <button onClick={() => fetchContacts(1)} style={{ padding: '4px 12px', fontSize: '12px' }}>Load Contacts</button>
           </div>
 
           {loadingContacts && <p>Loading contacts...</p>}
 
           {contacts.length > 0 && (
-            <div>
+            <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
                 <label>
                   <input
@@ -113,7 +112,13 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
-            </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
+                <button onClick={() => fetchContacts(page - 1)} disabled={page <= 1}>⬅ Previous</button>
+                <span>Page {page} of {totalPages}</span>
+                <button onClick={() => fetchContacts(page + 1)} disabled={page >= totalPages}>Next ➡</button>
+              </div>
+            </>
           )}
         </>
       ) : (
