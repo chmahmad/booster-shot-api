@@ -1,19 +1,19 @@
 import Papa from 'papaparse';
 
+// Use a CORS proxy for frontend access. For production, use a server-side proxy!
+const CORS_PROXY = "https://corsproxy.io/?";
+
 /**
- * Fetches and parses the public Google Sheet as an array of objects.
+ * Fetches and parses a public Google Sheet as an array of objects.
  * @param {string} sheetId - The Google Sheet ID.
  * @param {number|string} [gid=0] - (Optional) The sheet GID/tab number.
  * @returns {Promise<Array<Object>>} - Resolves to array of row objects.
- *
- * NOTE: Google Sheets CSV export requires the sheet to be shared as "Anyone with the link".
- *       If you get CORS errors, you may need to use a CORS proxy for frontend apps.
  */
 export async function fetchGoogleSheet(sheetId, gid = 0) {
-  // Use the new sheet ID and correct URL format (no &id=... part)
   const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+  const proxiedUrl = CORS_PROXY + encodeURIComponent(csvUrl);
   return new Promise((resolve, reject) => {
-    Papa.parse(csvUrl, {
+    Papa.parse(proxiedUrl, {
       download: true,
       header: true,
       skipEmptyLines: true,
@@ -23,7 +23,7 @@ export async function fetchGoogleSheet(sheetId, gid = 0) {
   });
 }
 
-// Example usage (with your new sheet ID):
+// Example usage:
 // fetchGoogleSheet('1WgpBMk5OUy-tHwSS2tM8lmGS_vrXg50Ws04llO8XUYI')
 //   .then(rows => console.log(rows))
 //   .catch(err => console.error(err));
