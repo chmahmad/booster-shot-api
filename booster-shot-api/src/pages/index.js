@@ -15,6 +15,22 @@ export default function ContactList() {
   const [campaignLoading, setCampaignLoading] = useState(false);
   const [rateLimitError, setRateLimitError] = useState(null);
 
+  // --- Added for booster shot/campaign/message selection ---
+  const [boosterShotMessage, setBoosterShotMessage] = useState('');
+  const [campaign, setCampaign] = useState('');
+  const [smsMessage, setSmsMessage] = useState('');
+
+  // Example options (replace with real data later)
+  const boosterShotOptions = [
+    { value: 'shot1', label: 'Booster Shot 1' },
+    { value: 'shot2', label: 'Booster Shot 2' }
+  ];
+  const campaignOptions = [
+    { value: 'camp1', label: 'Campaign 1' },
+    { value: 'camp2', label: 'Campaign 2' }
+  ];
+  // ---------------------------------------------------------
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setLocationId(params.get('location_id'));
@@ -185,10 +201,80 @@ export default function ContactList() {
         <>
           <p><strong>Subaccount ID:</strong> {locationId}</p>
 
-          <textarea
-            placeholder="Type your SMS/Text here..."
-            style={{ width: '100%', height: '100px', marginBottom: '20px' }}
-          />
+          {/* ----- ADDED FORM SECTION BELOW ----- */}
+          <div
+            style={{
+              background: '#f8f9fa',
+              border: '1px solid #ddd',
+              padding: '20px',
+              borderRadius: '6px',
+              marginBottom: '20px',
+              maxWidth: 600
+            }}
+          >
+            <div style={{ marginBottom: '16px' }}>
+              <label>
+                <strong>Booster Shot message Selection</strong>&nbsp;
+                <select
+                  value={boosterShotMessage}
+                  onChange={e => setBoosterShotMessage(e.target.value)}
+                  style={{ width: '60%', padding: '6px' }}
+                >
+                  <option value="">-- Select Booster Shot --</option>
+                  {boosterShotOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label>
+                <strong>Select Campaign</strong>&nbsp;
+                <select
+                  value={campaign}
+                  onChange={e => setCampaign(e.target.value)}
+                  style={{ width: '60%', padding: '6px' }}
+                >
+                  <option value="">-- Select Campaign --</option>
+                  {campaignOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label>
+                <strong>Your SMS message goes here</strong>
+                <textarea
+                  placeholder="Type your SMS/Text here..."
+                  value={smsMessage}
+                  onChange={e => setSmsMessage(e.target.value)}
+                  style={{ width: '100%', height: '80px', marginTop: '6px', padding: '8px' }}
+                />
+              </label>
+            </div>
+
+            <button
+              onClick={handleLaunchCampaign}
+              disabled={campaignLoading || selectedContacts.size === 0 || !!rateLimitError}
+              style={{
+                marginTop: '10px',
+                padding: '10px 24px',
+                fontSize: '16px',
+                backgroundColor: '#28a745',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: selectedContacts.size > 0 && !rateLimitError ? 'pointer' : 'not-allowed',
+                width: '100%'
+              }}
+            >
+              {campaignLoading ? 'Launching...' : '🎯 Launch Campaign'}
+            </button>
+          </div>
+          {/* ----- END ADDED FORM SECTION ----- */}
 
           <button
             onClick={handleLoadContacts}
