@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchGoogleSheet } from './fetchGoogleSheet';
+import { fetchGoogleSheet } from '../lib/fetchGoogleSheet';
 
 export default function ContactList() {
   const [locationId, setLocationId] = useState(null);
