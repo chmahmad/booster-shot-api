@@ -1,5 +1,6 @@
 import Papa from 'papaparse';
 
+// Use a CORS proxy for frontend access. For production, use a server-side proxy!
 const CORS_PROXY = "https://corsproxy.io/?";
 
 /**
@@ -8,7 +9,7 @@ const CORS_PROXY = "https://corsproxy.io/?";
  * @returns {Promise<Array<Object>>} - Resolves to array of row objects.
  */
 export async function fetchGoogleSheet(gid = 0) {
-  // Your sheet ID (leave this string as-is)
+  // Your sheet ID for https://docs.google.com/spreadsheets/d/1WgpBMk5OUy-tHwSS2tM8lmGS_vrXg50Ws04llO8XUYI/edit
   const sheetId = "1WgpBMk5OUy-tHwSS2tM8lmGS_vrXg50Ws04llO8XUYI";
   const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
   const proxiedUrl = CORS_PROXY + encodeURIComponent(csvUrl);
@@ -24,6 +25,6 @@ export async function fetchGoogleSheet(gid = 0) {
 }
 
 // Example usage:
-fetchGoogleSheet() // loads first tab (gid=0)
-  .then(rows => console.log(rows))
-  .catch(err => console.error(err));
+// fetchGoogleSheet() // or fetchGoogleSheet(0)
+//   .then(rows => console.log(rows))
+//   .catch(err => console.error(err));
