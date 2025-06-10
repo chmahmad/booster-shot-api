@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { fetchGoogleSheet } from './fetchGoogleSheet';
 
 export default function ContactList() {
   const [locationId, setLocationId] = useState(null);
@@ -15,26 +16,59 @@ export default function ContactList() {
   const [campaignLoading, setCampaignLoading] = useState(false);
   const [rateLimitError, setRateLimitError] = useState(null);
 
-  // --- Added for booster shot/campaign/message selection ---
+  // --- Booster shot/campaign/message selection from Google Sheet ---
   const [boosterShotMessage, setBoosterShotMessage] = useState('');
   const [campaign, setCampaign] = useState('');
   const [smsMessage, setSmsMessage] = useState('');
+  const [offers, setOffers] = useState([]);
+  const [offerCategories, setOfferCategories] = useState([]);
+  const [campaignNames, setCampaignNames] = useState([]);
 
-  // Example options (replace with real data later)
-  const boosterShotOptions = [
-    { value: 'shot1', label: 'Booster Shot 1' },
-    { value: 'shot2', label: 'Booster Shot 2' }
-  ];
-  const campaignOptions = [
-    { value: 'camp1', label: 'Campaign 1' },
-    { value: 'camp2', label: 'Campaign 2' }
-  ];
-  // ---------------------------------------------------------
+  // Google Sheet ID and GID
+  const SHEET_ID = '1VIg_-o7akUicqWX0CuVedozJW44UEM6vcQ-RCpvsdoE';
+  const GID = 0;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setLocationId(params.get('location_id'));
   }, []);
+
+  // Load Google Sheet offers
+  useEffect(() => {
+    fetchGoogleSheet(SHEET_ID, GID)
+      .then(data => {
+        setOffers(data);
+        const categories = Array.from(new Set(data.map(row => row.Offer_Category).filter(Boolean)));
+        setOfferCategories(categories);
+      })
+      .catch(err => {
+        console.error('Failed to fetch sheet:', err);
+      });
+  }, []);
+
+  // When Booster Shot category changes, update campaign names
+  useEffect(() => {
+    if (!boosterShotMessage) {
+      setCampaignNames([]);
+      setCampaign('');
+      setSmsMessage('');
+      return;
+    }
+    const filtered = offers.filter(row => row.Offer_Category === boosterShotMessage);
+    setCampaignNames(filtered.map(row => row.Offer_Name));
+    setCampaign('');
+    setSmsMessage('');
+  }, [boosterShotMessage, offers]);
+
+  // When campaign changes, update SMS message
+  useEffect(() => {
+    if (!campaign) {
+      setSmsMessage('');
+      return;
+    }
+    const offer = offers.find(row => row.Offer_Name === campaign && row.Offer_Category === boosterShotMessage);
+    setSmsMessage(offer?.Text_Preview || '');
+  }, [campaign, boosterShotMessage, offers]);
 
   const loadPage = async (url, pageNumber, resetHistory = false) => {
     setLoading(true);
@@ -221,8 +255,8 @@ export default function ContactList() {
                   style={{ width: '60%', padding: '6px' }}
                 >
                   <option value="">-- Select Booster Shot --</option>
-                  {boosterShotOptions.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  {offerCategories.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
                   ))}
                 </select>
               </label>
@@ -235,10 +269,11 @@ export default function ContactList() {
                   value={campaign}
                   onChange={e => setCampaign(e.target.value)}
                   style={{ width: '60%', padding: '6px' }}
+                  disabled={!boosterShotMessage}
                 >
                   <option value="">-- Select Campaign --</option>
-                  {campaignOptions.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  {campaignNames.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
                   ))}
                 </select>
               </label>
