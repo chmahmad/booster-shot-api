@@ -5,7 +5,7 @@ const CORS_PROXY = "https://corsproxy.io/?";
 
 /**
  * Fetches and parses your public Google Sheet as an array of objects.
- * @param {number|string} [gid=0] - (Optional) The sheet tab GID (default: 0, first tab).
+ * @param {number} [gid=0] - The sheet tab GID (default: 0, first tab).
  * @returns {Promise<Array<Object>>} - Resolves to array of row objects.
  */
 export async function fetchGoogleSheet(gid = 0) {
