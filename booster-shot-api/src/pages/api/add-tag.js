@@ -1,3 +1,8 @@
+const GHL_API_KEY = process.env.GHL_API_KEY || process.env.GHL_API_TOKEN;
+const GHL_API_URL = "https://rest.gohighlevel.com/v1/contacts";
+const BATCH_SIZE = 100;      // GHL burst limit per 10 seconds
+const BATCH_INTERVAL = 10_000; // 10 seconds in ms
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
@@ -5,122 +10,82 @@ export default async function handler(req, res) {
 
   const { contactIds, tag } = req.body;
 
-  if (!contactIds || !Array.isArray(contactIds) || !tag) {
-    return res.status(400).json({ error: 'Invalid request body' });
+  if (!contactIds || !Array.isArray(contactIds) || contactIds.length === 0 || !tag) {
+    return res.status(400).json({ error: 'contactIds (array) and tag are required' });
   }
 
-  try {
-    // First check rate limit status
-    const rateLimitCheck = await fetch('https://rest.gohighlevel.com/v1/contacts', {
-      headers: {
-        'Authorization': `Bearer ${process.env.GHL_API_KEY}`
-      }
-    });
+  if (!GHL_API_KEY) {
+    return res.status(500).json({ error: 'API key missing' });
+  }
 
-    const remaining = parseInt(rateLimitCheck.headers.get('ratelimit-remaining') || '0');
-    const resetTime = parseInt(rateLimitCheck.headers.get('ratelimit-reset') || '0');
+  let results = [];
+  let rateLimitHit = false;
+  let resetTime = null;
 
-    if (remaining <= 0) {
-      const resetDate = new Date(Date.now() + resetTime * 1000);
-      return res.status(429).json({
-        error: `Rate limit exceeded. Resets at: ${resetDate.toISOString()}`,
-        resetTime: resetTime
-      });
-    }
-
-    // Process contacts
-    const results = [];
-    const MAX_RETRIES = 3;
-    const BASE_DELAY = 2000;
-
-    for (const contactId of contactIds) {
-      let retryCount = 0;
-      let success = false;
-      let lastError = '';
-
-      while (retryCount < MAX_RETRIES && !success) {
-        try {
-          if (retryCount > 0) {
-            const delay = BASE_DELAY * Math.pow(2, retryCount);
-            await new Promise(resolve => setTimeout(resolve, delay));
-          }
-
-          const response = await fetch(`https://rest.gohighlevel.com/v1/contacts/${contactId}/tags`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${process.env.GHL_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ tags: [tag] }),
-            timeout: 10000
-          });
-
-          // Handle text response first
-          const responseText = await response.text();
-          let responseData = {};
-
-          try {
-            responseData = JSON.parse(responseText);
-          } catch {
-            responseData = { error: responseText };
-          }
-
-          if (response.status === 429) {
-            const retryAfter = parseInt(response.headers.get('ratelimit-reset') || '0');
-            lastError = `Rate limit exceeded (resets in ${retryAfter}s)`;
-            // Stop processing further, inform the user about rate limit and when to retry
-            return res.status(429).json({
-              error: `Rate limit exceeded. Resets at: ${new Date(Date.now() + retryAfter * 1000).toISOString()}`,
-              results,
-              resetTime: retryAfter
-            });
-          }
-
-          if (!response.ok) {
-            lastError = responseData.error || `HTTP ${response.status}`;
-            retryCount++;
-            continue;
-          }
-
-          // Verification
-          const verifyResponse = await fetch(`https://rest.gohighlevel.com/v1/contacts/${contactId}`, {
-            headers: {
-              'Authorization': `Bearer ${process.env.GHL_API_KEY}`,
-            },
-          });
-
-          const contactData = await verifyResponse.json();
-          success = contactData.tags?.includes(tag);
-
-          if (!success) {
-            lastError = 'Tag not found after addition';
-            retryCount++;
-          }
-
-        } catch (error) {
-          lastError = error.message;
-          retryCount++;
-        }
-      }
-
-      results.push({
-        contactId,
-        success,
-        error: success ? undefined : lastError || 'Max retries exceeded'
+  async function tagContact(contactId) {
+    try {
+      const response = await fetch(`${GHL_API_URL}/${contactId}/tags`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${GHL_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ tags: [tag] })
       });
 
-      // Enforce minimum delay between requests
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (response.status === 429) {
+        // Rate limit hit
+        const retryAfter = parseInt(response.headers.get('ratelimit-reset')) || 10;
+        rateLimitHit = true;
+        resetTime = retryAfter;
+        return { contactId, success: false, error: 'Rate limit hit', resetTime: retryAfter };
+      }
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        return { contactId, success: false, error: errData.error || response.statusText };
+      }
+
+      // Optional: verify tag was actually added (can be slow, so usually skip)
+      // const verifyResponse = await fetch(`${GHL_API_URL}/${contactId}`, {
+      //   headers: { 'Authorization': `Bearer ${GHL_API_KEY}` },
+      // });
+      // const contactData = await verifyResponse.json();
+      // const tagExists = Array.isArray(contactData.tags) && contactData.tags.includes(tag);
+      // return { contactId, success: tagExists };
+
+      return { contactId, success: true };
+    } catch (err) {
+      return { contactId, success: false, error: err.message || 'Unknown error' };
+    }
+  }
+
+  for (let i = 0; i < contactIds.length; i += BATCH_SIZE) {
+    const batch = contactIds.slice(i, i + BATCH_SIZE);
+
+    // Tag contacts in this batch in parallel (up to 100 at once)
+    const batchResults = await Promise.all(batch.map(tagContact));
+    results.push(...batchResults);
+
+    // If a rate limit was hit, stop further processing
+    if (rateLimitHit) {
+      break;
     }
 
-    return res.status(207).json({
-      success: results.every(r => r.success),
+    // If there are more contacts, wait 10s before next batch
+    if (i + BATCH_SIZE < contactIds.length) {
+      await new Promise((resolve) => setTimeout(resolve, BATCH_INTERVAL));
+    }
+  }
+
+  if (rateLimitHit) {
+    return res.status(429).json({
+      error: `Rate limit exceeded. Try again after ${resetTime} seconds.`,
       results,
-      message: 'Processing complete'
+      resetTime
     });
-
-  } catch (error) {
-    console.error('Handler error:', error);
-    return res.status(500).json({ error: error.message });
   }
+
+  // Success
+  return res.status(200).json({ results });
 }
