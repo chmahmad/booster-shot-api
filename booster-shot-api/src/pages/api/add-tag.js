@@ -3,20 +3,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  // Clone body to prevent parsing issues
-  const { contactIds, tag } = JSON.parse(JSON.stringify(req.body));
+  const { contactIds, tag } = req.body;
 
   if (!contactIds || !Array.isArray(contactIds) || !tag) {
     return res.status(400).json({ error: 'Invalid request body' });
   }
 
   try {
-    // GHL Bulk Tagging Endpoint
-    const ghlBulkUrl = 'https://rest.gohighlevel.com/v1/contacts/tags';
-    
-    // Process in batches to avoid timeout and rate limits
-    const BATCH_SIZE = 100; // Number of contacts per batch
     const results = [];
+    const BATCH_SIZE = 100;
     const totalBatches = Math.ceil(contactIds.length / BATCH_SIZE);
 
     for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
@@ -25,7 +20,8 @@ export default async function handler(req, res) {
       const batchIds = contactIds.slice(batchStart, batchEnd);
 
       try {
-        const response = await fetch(ghlBulkUrl, {
+        // Try bulk tagging first
+        const bulkResponse = await fetch('https://rest.gohighlevel.com/v1/contacts/tags', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${process.env.GHL_API_KEY}`,
@@ -37,42 +33,62 @@ export default async function handler(req, res) {
           }),
         });
 
-        const data = await response.json();
+        // Handle response properly
+        const responseText = await bulkResponse.text();
+        let responseData;
+        try {
+          responseData = responseText ? JSON.parse(responseText) : {};
+        } catch (e) {
+          responseData = { error: responseText };
+        }
 
-        if (!response.ok) {
-          // If bulk fails, fall back to individual tagging
-          console.warn(`Bulk tagging failed for batch ${batchNum + 1}, falling back to individual`);
-          const batchResults = await processIndividualTags(batchIds, tag);
-          results.push(...batchResults);
-        } else {
-          // Bulk success - verify a sample of contacts
-          const sampleSize = Math.min(5, batchIds.length);
-          const sampleIds = batchIds.slice(0, sampleSize);
-          const verificationResults = await verifyTags(sampleIds, tag);
-          
-          batchIds.forEach(contactId => {
+        if (!bulkResponse.ok) {
+          throw new Error(responseData.error || `HTTP ${bulkResponse.status}: ${bulkResponse.statusText}`);
+        }
+
+        // If bulk succeeded, verify a sample
+        const sampleIds = batchIds.slice(0, Math.min(5, batchIds.length));
+        for (const contactId of sampleIds) {
+          try {
+            const verifyResponse = await fetch(`https://rest.gohighlevel.com/v1/contacts/${contactId}`, {
+              headers: {
+                'Authorization': `Bearer ${process.env.GHL_API_KEY}`,
+              },
+            });
+            const contactData = await verifyResponse.json();
+            const tagExists = contactData.tags?.includes(tag);
+            
             results.push({
               contactId,
-              success: verificationResults.every(r => r.success),
-              verified: verificationResults.every(r => r.success)
+              success: tagExists,
+              verified: tagExists
             });
-          });
+          } catch (verifyError) {
+            results.push({
+              contactId,
+              success: false,
+              error: `Verification failed: ${verifyError.message}`
+            });
+          }
         }
 
-        // Add delay between batches to avoid rate limiting
-        if (batchNum < totalBatches - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-
-      } catch (error) {
-        console.error(`Error processing batch ${batchNum + 1}:`, error);
+        // Assume success for non-verified contacts in batch
         batchIds.forEach(contactId => {
-          results.push({
-            contactId,
-            success: false,
-            error: error.message
-          });
+          if (!sampleIds.includes(contactId)) {
+            results.push({ contactId, success: true, verified: false });
+          }
         });
+
+      } catch (bulkError) {
+        // Fallback to individual tagging if bulk fails
+        console.warn(`Bulk tagging failed, falling back to individual: ${bulkError.message}`);
+        const batchResults = await processIndividualTags(batchIds, tag);
+        results.push(...batchResults);
+      }
+
+      // Add delay between batches
+      if (batchNum < totalBatches - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 
@@ -90,11 +106,10 @@ export default async function handler(req, res) {
   }
 }
 
-// Fallback function for individual tagging
 async function processIndividualTags(contactIds, tag) {
   const results = [];
   const MAX_RETRIES = 2;
-  const BASE_DELAY = 500;
+  const BASE_DELAY = 1000;
 
   for (const contactId of contactIds) {
     let retryCount = 0;
@@ -116,21 +131,41 @@ async function processIndividualTags(contactIds, tag) {
           body: JSON.stringify({ tags: [tag] }),
         });
 
+        // Handle response properly
+        const responseText = await response.text();
+        let responseData;
+        try {
+          responseData = responseText ? JSON.parse(responseText) : {};
+        } catch (e) {
+          responseData = { error: responseText };
+        }
+
         if (response.status === 429) {
           lastError = 'Rate limit exceeded';
           retryCount++;
           continue;
         }
 
-        const data = await response.json();
         if (!response.ok) {
-          lastError = data.message || `HTTP ${response.status}`;
+          lastError = responseData.error || `HTTP ${response.status}: ${response.statusText}`;
           retryCount++;
           continue;
         }
 
-        success = true;
-        results.push({ contactId, success: true });
+        // Verify tag was added
+        const verifyResponse = await fetch(`https://rest.gohighlevel.com/v1/contacts/${contactId}`, {
+          headers: {
+            'Authorization': `Bearer ${process.env.GHL_API_KEY}`,
+          },
+        });
+        const contactData = await verifyResponse.json();
+        success = contactData.tags?.includes(tag);
+
+        if (!success) {
+          lastError = 'Tag not found after addition';
+          retryCount++;
+          continue;
+        }
 
       } catch (error) {
         lastError = error.message;
@@ -138,36 +173,14 @@ async function processIndividualTags(contactIds, tag) {
       }
     }
 
-    if (!success) {
-      results.push({ contactId, success: false, error: lastError });
-    }
+    results.push({
+      contactId,
+      success,
+      error: success ? undefined : lastError || 'Max retries exceeded'
+    });
 
     // Small delay between individual requests
-    await new Promise(resolve => setTimeout(resolve, 100));
-  }
-
-  return results;
-}
-
-// Verification function
-async function verifyTags(contactIds, tag) {
-  const results = [];
-  
-  for (const contactId of contactIds) {
-    try {
-      const response = await fetch(`https://rest.gohighlevel.com/v1/contacts/${contactId}`, {
-        headers: {
-          'Authorization': `Bearer ${process.env.GHL_API_KEY}`,
-        },
-      });
-
-      const data = await response.json();
-      const tagExists = data.tags?.includes(tag);
-      results.push({ contactId, success: tagExists });
-    } catch (error) {
-      console.error(`Verification failed for ${contactId}:`, error);
-      results.push({ contactId, success: false });
-    }
+    await new Promise(resolve => setTimeout(resolve, 200));
   }
 
   return results;
