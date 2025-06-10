@@ -11,15 +11,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    const url = new URL('https://rest.gohighlevel.com/v1/contacts');
-    const params = new URLSearchParams({
-      limit,
-      ...(locationId && { locationId }),
-      ...(startAfter && { startAfter }),
-      ...(startAfterId && { startAfterId })
-    });
+    // Build query params for GHL API
+    const params = new URLSearchParams();
+    params.append('limit', limit);
+    if (locationId) params.append('locationId', locationId);
+    if (startAfter) params.append('startAfter', startAfter);
+    if (startAfterId) params.append('startAfterId', startAfterId);
 
-    const response = await fetch(`${url}?${params}`, {
+    const ghlUrl = `https://rest.gohighlevel.com/v1/contacts?${params.toString()}`;
+
+    const response = await fetch(ghlUrl, {
       headers: {
         Authorization: `Bearer ${API_TOKEN}`,
         'Content-Type': 'application/json',
@@ -27,18 +28,23 @@ export default async function handler(req, res) {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      console.error('API Error:', error);
+      let error;
+      try {
+        error = await response.json();
+      } catch {
+        error = { message: 'Unknown API error' };
+      }
+      console.error('GHL API Error:', error);
       return res.status(response.status).json({ error: error.message || 'API Error' });
     }
 
     const data = await response.json();
-
-    // Extract pagination info from meta
     const meta = data.meta || {};
+
+    // Go High Level uses startAfter & startAfterId for pagination
     const hasMore = !!(meta.startAfter && meta.startAfterId);
     const nextPageUrl = hasMore
-      ? `/api/get-contacts?locationId=${locationId}&limit=${limit}&startAfter=${meta.startAfter}&startAfterId=${meta.startAfterId}`
+      ? `/api/get-contacts?locationId=${locationId || ''}&limit=${limit}&startAfter=${encodeURIComponent(meta.startAfter)}&startAfterId=${encodeURIComponent(meta.startAfterId)}`
       : null;
 
     return res.status(200).json({
@@ -46,10 +52,11 @@ export default async function handler(req, res) {
       pagination: {
         nextPageUrl,
         total: meta.total || 0,
-        hasMore
+        hasMore,
+        startAfter: meta.startAfter || null,
+        startAfterId: meta.startAfterId || null
       }
     });
-
   } catch (error) {
     console.error('Server Error:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
