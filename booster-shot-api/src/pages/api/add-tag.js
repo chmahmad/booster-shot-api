@@ -180,7 +180,7 @@ async function processIndividualTags(contactIds, tag) {
     });
 
     // Small delay between individual requests
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(resolve => setTimeout(resolve, 2000));
   }
 
   return results;
