@@ -12,7 +12,6 @@ export default async function handler(req, res) {
   try {
     const results = [];
 
-    // Loop over each contact ID to add the tag
     for (const contactId of contactIds) {
       const ghlApiUrl = `https://rest.gohighlevel.com/v1/contacts/${contactId}/tags`;
 
@@ -22,29 +21,27 @@ export default async function handler(req, res) {
           'Authorization': `Bearer ${process.env.GHL_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ tag }),
+        body: JSON.stringify({ tags: [tag] }), // 👈 FIX: Must be an array of tags
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        // Log error and collect failure info
         results.push({ contactId, success: false, error: data.error || 'Failed to add tag' });
       } else {
         results.push({ contactId, success: true, data });
       }
     }
 
-    // Check if all succeeded
     const allSuccess = results.every(r => r.success);
 
     if (allSuccess) {
       return res.status(200).json({ success: true, results });
     } else {
-      return res.status(207).json({ success: false, results }); // 207 Multi-Status
+      return res.status(207).json({ success: false, results });
     }
   } catch (error) {
     console.error('API Add Tag Error:', error);
-    return res.status(500).json({ error: 'Internal Server Error' });
+    return res.status(500).json({ error: error.message || 'Internal Server Error' });
   }
 }
