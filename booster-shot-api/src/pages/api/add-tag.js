@@ -19,7 +19,7 @@ export default async function handler(req, res) {
 
     const remaining = parseInt(rateLimitCheck.headers.get('ratelimit-remaining') || '0');
     const resetTime = parseInt(rateLimitCheck.headers.get('ratelimit-reset') || '0');
-    
+
     if (remaining <= 0) {
       const resetDate = new Date(Date.now() + resetTime * 1000);
       return res.status(429).json({
@@ -58,7 +58,7 @@ export default async function handler(req, res) {
           // Handle text response first
           const responseText = await response.text();
           let responseData = {};
-          
+
           try {
             responseData = JSON.parse(responseText);
           } catch {
@@ -66,10 +66,14 @@ export default async function handler(req, res) {
           }
 
           if (response.status === 429) {
-            const resetTime = response.headers.get('ratelimit-reset') || 'unknown';
-            lastError = `Rate limit exceeded (resets in ${resetTime}s)`;
-            retryCount++;
-            continue;
+            const retryAfter = parseInt(response.headers.get('ratelimit-reset') || '0');
+            lastError = `Rate limit exceeded (resets in ${retryAfter}s)`;
+            // Stop processing further, inform the user about rate limit and when to retry
+            return res.status(429).json({
+              error: `Rate limit exceeded. Resets at: ${new Date(Date.now() + retryAfter * 1000).toISOString()}`,
+              results,
+              resetTime: retryAfter
+            });
           }
 
           if (!response.ok) {
@@ -84,7 +88,7 @@ export default async function handler(req, res) {
               'Authorization': `Bearer ${process.env.GHL_API_KEY}`,
             },
           });
-          
+
           const contactData = await verifyResponse.json();
           success = contactData.tags?.includes(tag);
 

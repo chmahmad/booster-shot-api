@@ -13,6 +13,7 @@ export default function ContactList() {
   const [contactsLoaded, setContactsLoaded] = useState(false);
   const [debugInfo, setDebugInfo] = useState({});
   const [campaignLoading, setCampaignLoading] = useState(false);
+  const [rateLimitError, setRateLimitError] = useState(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -21,6 +22,7 @@ export default function ContactList() {
 
   const loadPage = async (url, pageNumber, resetHistory = false) => {
     setLoading(true);
+    setRateLimitError(null);
     try {
       const res = await fetch(url);
       const data = await res.json();
@@ -90,67 +92,90 @@ export default function ContactList() {
   };
 
   const handleLoadContacts = () => {
-  if (locationId) {
-    const initialUrl = `/api/get-contacts?locationId=${locationId}&limit=${limit}`;
-    loadPage(initialUrl, 1, true);
-  }
-};
-
-const handleLaunchCampaign = async () => {
-  if (selectedContacts.size === 0) {
-    alert('Please select at least one contact.');
-    return;
-  }
-
-  setCampaignLoading(true);
-  try {
-    // Show processing dialog
-    const confirmed = window.confirm(
-      `About to tag ${selectedContacts.size} contacts with "booster shot".\n\nThis may take several minutes for large batches. Continue?`
-    );
-    if (!confirmed) return;
-
-    const response = await fetch('/api/add-tag', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        contactIds: Array.from(selectedContacts),
-        tag: 'booster shot'
-      })
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Failed to add tags');
-    }
-
-    // Detailed success/failure report
-    const successCount = result.results.filter(r => r.success).length;
-    const failedCount = result.results.length - successCount;
-
-    if (failedCount > 0) {
-      alert(`✅ ${successCount} contacts tagged successfully\n❌ ${failedCount} contacts failed`);
-    } else {
-      alert(`🎉 Successfully tagged all ${successCount} contacts!`);
-    }
-
-    // Refresh contacts to see changes
     if (locationId) {
-      const currentUrl = prevPages[currentPage - 1] || 
-        `/api/get-contacts?locationId=${locationId}&limit=${limit}`;
-      loadPage(currentUrl, currentPage);
+      const initialUrl = `/api/get-contacts?locationId=${locationId}&limit=${limit}`;
+      loadPage(initialUrl, 1, true);
+    }
+  };
+
+  const handleLaunchCampaign = async () => {
+    if (selectedContacts.size === 0) {
+      alert('Please select at least one contact.');
+      return;
     }
 
-  } catch (err) {
-    console.error(err);
-    alert(`Error: ${err.message}`);
-  } finally {
-    setCampaignLoading(false);
-  }
-};
+    setCampaignLoading(true);
+    setRateLimitError(null);
+    try {
+      // Show processing dialog
+      const confirmed = window.confirm(
+        `About to tag ${selectedContacts.size} contacts with "booster shot".\n\nThis may take several minutes for large batches. Continue?`
+      );
+      if (!confirmed) return;
+
+      const response = await fetch('/api/add-tag', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contactIds: Array.from(selectedContacts),
+          tag: 'booster shot'
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.status === 429) {
+        setRateLimitError({
+          message: result.error,
+          resetTime: result.resetTime
+        });
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to add tags');
+      }
+
+      // Detailed success/failure report
+      const successCount = result.results.filter(r => r.success).length;
+      const failedCount = result.results.length - successCount;
+
+      if (failedCount > 0) {
+        alert(`✅ ${successCount} contacts tagged successfully\n❌ ${failedCount} contacts failed`);
+      } else {
+        alert(`🎉 Successfully tagged all ${successCount} contacts!`);
+      }
+
+      // Refresh contacts to see changes
+      if (locationId) {
+        const currentUrl = prevPages[currentPage - 1] ||
+          `/api/get-contacts?locationId=${locationId}&limit=${limit}`;
+        loadPage(currentUrl, currentPage);
+      }
+
+    } catch (err) {
+      console.error(err);
+      alert(`Error: ${err.message}`);
+    } finally {
+      setCampaignLoading(false);
+    }
+  };
+
+  // Helper to show time until rate limit resets
+  const getResetTimeString = () => {
+    if (rateLimitError?.resetTime) {
+      const seconds = Number(rateLimitError.resetTime);
+      if (!isNaN(seconds)) {
+        const now = Date.now();
+        const resetDate = new Date(now + seconds * 1000);
+        const mins = Math.floor(seconds / 60);
+        return `${mins} minute(s), at ${resetDate.toLocaleTimeString()}`;
+      }
+    }
+    return null;
+  };
 
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial' }}>
@@ -181,6 +206,23 @@ const handleLaunchCampaign = async () => {
           >
             {loading ? 'Loading...' : 'Select Campaign Contacts'}
           </button>
+
+          {rateLimitError && (
+            <div style={{
+              background: '#ffe0e0',
+              color: '#c00',
+              border: '1px solid #c00',
+              padding: '12px',
+              marginBottom: '16px',
+              borderRadius: '4px'
+            }}>
+              <strong>🚦 Rate Limit Hit:</strong>
+              <div>{rateLimitError.message}</div>
+              {getResetTimeString() && (
+                <div>Try again in {getResetTimeString()}.</div>
+              )}
+            </div>
+          )}
 
           {contactsLoaded && (
             <>
@@ -220,14 +262,14 @@ const handleLaunchCampaign = async () => {
 
                 <button
                   onClick={handleLaunchCampaign}
-                  disabled={campaignLoading || selectedContacts.size === 0}
+                  disabled={campaignLoading || selectedContacts.size === 0 || !!rateLimitError}
                   style={{
                     padding: '8px 16px',
                     backgroundColor: '#28a745',
                     color: '#fff',
                     border: 'none',
                     borderRadius: '4px',
-                    cursor: selectedContacts.size > 0 ? 'pointer' : 'not-allowed'
+                    cursor: selectedContacts.size > 0 && !rateLimitError ? 'pointer' : 'not-allowed'
                   }}
                 >
                   {campaignLoading ? 'Launching...' : '🎯 Launch Campaign'}
