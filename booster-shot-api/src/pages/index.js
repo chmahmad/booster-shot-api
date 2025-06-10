@@ -89,48 +89,61 @@ export default function ContactList() {
     setSelectedContacts(newSet);
   };
 
-  const handleLoadContacts = () => {
+const handleLaunchCampaign = async () => {
+  if (selectedContacts.size === 0) {
+    alert('Please select at least one contact.');
+    return;
+  }
+
+  setCampaignLoading(true);
+  try {
+    // Show processing dialog
+    const confirmed = window.confirm(
+      `About to tag ${selectedContacts.size} contacts with "booster shot".\n\nThis may take several minutes for large batches. Continue?`
+    );
+    if (!confirmed) return;
+
+    const response = await fetch('/api/add-tag', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        contactIds: Array.from(selectedContacts),
+        tag: 'booster shot'
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to add tags');
+    }
+
+    // Detailed success/failure report
+    const successCount = result.results.filter(r => r.success).length;
+    const failedCount = result.results.length - successCount;
+
+    if (failedCount > 0) {
+      alert(`✅ ${successCount} contacts tagged successfully\n❌ ${failedCount} contacts failed`);
+    } else {
+      alert(`🎉 Successfully tagged all ${successCount} contacts!`);
+    }
+
+    // Refresh contacts to see changes
     if (locationId) {
-      const initialUrl = `/api/get-contacts?locationId=${locationId}&limit=${limit}`;
-      loadPage(initialUrl, 1, true);
-    }
-  };
-
-  const handleLaunchCampaign = async () => {
-    if (selectedContacts.size === 0) {
-      alert('Please select at least one contact.');
-      return;
+      const currentUrl = prevPages[currentPage - 1] || 
+        `/api/get-contacts?locationId=${locationId}&limit=${limit}`;
+      loadPage(currentUrl, currentPage);
     }
 
-    setCampaignLoading(true);
-    try {
-      const response = await fetch('/api/add-tag', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          locationId,
-          contactIds: Array.from(selectedContacts),
-          tag: 'booster shot'
-        })
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        alert('🎉 Booster Shot tag added successfully to selected contacts!');
-        setSelectedContacts(new Set());
-      } else {
-        alert(`❗ Error adding tag: ${result.error || 'Unknown error'}`);
-      }
-    } catch (err) {
-      console.error(err);
-      alert('❗ Network or server error occurred.');
-    } finally {
-      setCampaignLoading(false);
-    }
-  };
+  } catch (err) {
+    console.error(err);
+    alert(`Error: ${err.message}`);
+  } finally {
+    setCampaignLoading(false);
+  }
+};
 
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial' }}>
