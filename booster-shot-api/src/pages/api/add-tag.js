@@ -184,4 +184,5 @@ async function processIndividualTags(contactIds, tag) {
   }
 
   return results;
+  console.log(`Processing batch ${batchNum + 1}/${totalBatches} with ${batchIds.length} contacts`);
 }
