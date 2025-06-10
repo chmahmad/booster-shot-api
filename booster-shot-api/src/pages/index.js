@@ -89,6 +89,13 @@ export default function ContactList() {
     setSelectedContacts(newSet);
   };
 
+  const handleLoadContacts = () => {
+  if (locationId) {
+    const initialUrl = `/api/get-contacts?locationId=${locationId}&limit=${limit}`;
+    loadPage(initialUrl, 1, true);
+  }
+};
+
 const handleLaunchCampaign = async () => {
   if (selectedContacts.size === 0) {
     alert('Please select at least one contact.');
