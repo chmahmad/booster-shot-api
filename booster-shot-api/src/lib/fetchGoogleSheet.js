@@ -4,12 +4,13 @@ import Papa from 'papaparse';
 const CORS_PROXY = "https://corsproxy.io/?";
 
 /**
- * Fetches and parses a public Google Sheet as an array of objects.
- * @param {string} sheetId - The Google Sheet ID.
+ * Fetches and parses your public Google Sheet as an array of objects.
  * @param {number|string} [gid=0] - (Optional) The sheet GID/tab number.
  * @returns {Promise<Array<Object>>} - Resolves to array of row objects.
  */
-export async function fetchGoogleSheet(sheetId, gid = 0) {
+export async function fetchGoogleSheet(gid = 0) {
+  // Your sheet ID:
+  const sheetId = "1WgpBMk5OUy-tHwSS2tM8lmGS_vrXg50Ws04llO8XUYI";
   const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
   const proxiedUrl = CORS_PROXY + encodeURIComponent(csvUrl);
   return new Promise((resolve, reject) => {
@@ -24,6 +25,6 @@ export async function fetchGoogleSheet(sheetId, gid = 0) {
 }
 
 // Example usage:
-// fetchGoogleSheet('1WgpBMk5OUy-tHwSS2tM8lmGS_vrXg50Ws04llO8XUYI')
+// fetchGoogleSheet()
 //   .then(rows => console.log(rows))
 //   .catch(err => console.error(err));
