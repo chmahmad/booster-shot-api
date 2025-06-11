@@ -157,7 +157,6 @@ export default function ContactList() {
     setCampaignLoading(true);
     setRateLimitError(null);
     try {
-      // Show processing dialog
       const confirmed = window.confirm(
         `About to tag ${selectedContacts.size} contacts with "booster shot".\n\nThis may take several minutes for large batches. Continue?`
       );
@@ -170,7 +169,9 @@ export default function ContactList() {
         },
         body: JSON.stringify({
           contactIds: Array.from(selectedContacts),
-          tag: 'booster shot'
+          tag: 'booster shot',
+          boosterShotMessage: smsMessage,
+          locationId
         })
       });
 
@@ -196,6 +197,9 @@ export default function ContactList() {
         alert(`✅ ${successCount} contacts tagged successfully\n❌ ${failedCount} contacts failed`);
       } else {
         alert(`🎉 Successfully tagged all ${successCount} contacts!`);
+      }
+      if (result.customValueResult && !result.customValueResult.success) {
+        alert(`Warning: Custom Value update failed: ${result.customValueResult.error}`);
       }
 
       // Refresh contacts to see changes
