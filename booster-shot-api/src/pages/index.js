@@ -25,13 +25,31 @@ export default function ContactList() {
   const [offerCategories, setOfferCategories] = useState([]);
   const [campaignNames, setCampaignNames] = useState([]);
 
-  // --- Search ---
+  // --- Search and Tag Filter ---
   const [searchTerm, setSearchTerm] = useState('');
+  const [tags, setTags] = useState([]); // All tags for the location
+  const [selectedTag, setSelectedTag] = useState(''); // Tag selected for filter
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setLocationId(params.get('location_id'));
   }, []);
+
+  // Fetch all tags for this location (subaccount) on initial load
+  useEffect(() => {
+    async function fetchTags() {
+      if (!locationId) return;
+      try {
+        const res = await fetch(`/api/get-tags?locationId=${locationId}`);
+        if (!res.ok) throw new Error('Failed to fetch tags');
+        const data = await res.json();
+        setTags(data.tags || []);
+      } catch (err) {
+        setTags([]);
+      }
+    }
+    fetchTags();
+  }, [locationId]);
 
   // Load Google Sheet offers from your Apps Script Web App (JSON)
   useEffect(() => {
@@ -221,16 +239,24 @@ export default function ContactList() {
     }
   };
 
-  // Helper: filter contacts by search term
+  // Helper: filter contacts by search term and selected tag
   const filteredContacts = () => {
-    if (!searchTerm) return contacts;
-    const term = searchTerm.toLowerCase();
-    return contacts.filter(contact =>
-      (contact.firstName && contact.firstName.toLowerCase().includes(term)) ||
-      (contact.lastName && contact.lastName.toLowerCase().includes(term)) ||
-      (contact.email && contact.email.toLowerCase().includes(term)) ||
-      (contact.phone && contact.phone.toLowerCase().includes(term))
-    );
+    let filtered = contacts;
+    if (selectedTag) {
+      filtered = filtered.filter(contact =>
+        Array.isArray(contact.tags) && contact.tags.includes(selectedTag)
+      );
+    }
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(contact =>
+        (contact.firstName && contact.firstName.toLowerCase().includes(term)) ||
+        (contact.lastName && contact.lastName.toLowerCase().includes(term)) ||
+        (contact.email && contact.email.toLowerCase().includes(term)) ||
+        (contact.phone && contact.phone.toLowerCase().includes(term))
+      );
+    }
+    return filtered;
   };
 
   // Helper to show time until rate limit resets
@@ -390,10 +416,29 @@ export default function ContactList() {
 
               <div style={{
                 display: 'flex',
-                flexDirection: 'column',
+                flexDirection: 'row',
+                alignItems: 'center',
                 gap: '10px',
-                marginBottom: '5px'
+                marginBottom: '5px',
+                maxWidth: 450
               }}>
+                {/* Tag Filter */}
+                <select
+                  value={selectedTag}
+                  onChange={e => setSelectedTag(e.target.value)}
+                  style={{
+                    minWidth: 110,
+                    padding: '7px',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc'
+                  }}
+                >
+                  <option value="">All Tags</option>
+                  {tags.map(tag => (
+                    <option key={tag} value={tag}>{tag}</option>
+                  ))}
+                </select>
+
                 {/* Search Box */}
                 <input
                   type="text"
@@ -407,18 +452,19 @@ export default function ContactList() {
                     border: '1px solid #ccc'
                   }}
                 />
+              </div>
 
-                {/* Select All / Unselect All and Selected counter */}
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
-                  <button onClick={toggleSelectAll}>
-                    {selectedContacts.size < filteredContacts().length ? 'Select All' : 'Unselect All'}
-                  </button>
-                  <div>Selected: {selectedContacts.size}</div>
-                </div>
+              {/* Select All / Unselect All and Selected counter */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '5px'
+              }}>
+                <button onClick={toggleSelectAll}>
+                  {selectedContacts.size < filteredContacts().length ? 'Select All' : 'Unselect All'}
+                </button>
+                <div>Selected: {selectedContacts.size}</div>
               </div>
 
               {filteredContacts().map((contact) => (
@@ -433,6 +479,11 @@ export default function ContactList() {
                     <div><strong>{contact.firstName || ''} {contact.lastName || ''}</strong></div>
                     <div>{contact.email || ''}</div>
                     <div>{contact.phone || ''}</div>
+                    <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>
+                      {Array.isArray(contact.tags) && contact.tags.length > 0
+                        ? contact.tags.join(', ')
+                        : ''}
+                    </div>
                   </div>
                 </div>
               ))}
