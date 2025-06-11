@@ -146,6 +146,8 @@ export default function ContactList() {
     }
   };
 
+  // Only keep one Launch Campaign button (in the form at the top)
+  // and make it launch the campaign for selected contacts
   const handleLaunchCampaign = async () => {
     if (selectedContacts.size === 0) {
       alert('Please select at least one contact.');
@@ -233,7 +235,7 @@ export default function ContactList() {
         <>
           <p><strong>Subaccount ID:</strong> {locationId}</p>
 
-          {/* ----- ADDED FORM SECTION BELOW ----- */}
+          {/* ----- FORM SECTION WITH THE ONLY LAUNCH CAMPAIGN BUTTON ----- */}
           <div
             style={{
               background: '#f8f9fa',
@@ -306,8 +308,11 @@ export default function ContactList() {
             >
               {campaignLoading ? 'Launching...' : '🎯 Launch Campaign'}
             </button>
+            <div style={{ marginTop: 10, fontSize: 13 }}>
+              <em>Select contacts below before clicking Launch Campaign</em>
+            </div>
           </div>
-          {/* ----- END ADDED FORM SECTION ----- */}
+          {/* ----- END OF FORM SECTION ----- */}
 
           <button
             onClick={handleLoadContacts}
@@ -378,21 +383,6 @@ export default function ContactList() {
                   </select>
                   <label> contacts per page</label>
                 </div>
-
-                <button
-                  onClick={handleLaunchCampaign}
-                  disabled={campaignLoading || selectedContacts.size === 0 || !!rateLimitError}
-                  style={{
-                    padding: '8px 16px',
-                    backgroundColor: '#28a745',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: selectedContacts.size > 0 && !rateLimitError ? 'pointer' : 'not-allowed'
-                  }}
-                >
-                  {campaignLoading ? 'Launching...' : '🎯 Launch Campaign'}
-                </button>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
