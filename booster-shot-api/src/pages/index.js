@@ -25,6 +25,9 @@ export default function ContactList() {
   const [offerCategories, setOfferCategories] = useState([]);
   const [campaignNames, setCampaignNames] = useState([]);
 
+  // --- Search ---
+  const [searchTerm, setSearchTerm] = useState('');
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setLocationId(params.get('location_id'));
@@ -126,8 +129,9 @@ export default function ContactList() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedContacts.size < contacts.length) {
-      setSelectedContacts(new Set(contacts.map((c) => c.id)));
+    const filtered = filteredContacts();
+    if (selectedContacts.size < filtered.length) {
+      setSelectedContacts(new Set(filtered.map((c) => c.id)));
     } else {
       setSelectedContacts(new Set());
     }
@@ -215,6 +219,18 @@ export default function ContactList() {
     } finally {
       setCampaignLoading(false);
     }
+  };
+
+  // Helper: filter contacts by search term
+  const filteredContacts = () => {
+    if (!searchTerm) return contacts;
+    const term = searchTerm.toLowerCase();
+    return contacts.filter(contact =>
+      (contact.firstName && contact.firstName.toLowerCase().includes(term)) ||
+      (contact.lastName && contact.lastName.toLowerCase().includes(term)) ||
+      (contact.email && contact.email.toLowerCase().includes(term)) ||
+      (contact.phone && contact.phone.toLowerCase().includes(term))
+    );
   };
 
   // Helper to show time until rate limit resets
@@ -374,29 +390,38 @@ export default function ContactList() {
 
               <div style={{
                 display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '10px'
+                flexDirection: 'column',
+                gap: '10px',
+                marginBottom: '5px'
               }}>
-                <div>
-                  <label>Show </label>
-                  <select value={limit} onChange={(e) => setLimit(Number(e.target.value))}>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                  <label> contacts per page</label>
+                {/* Search Box */}
+                <input
+                  type="text"
+                  placeholder="Search contacts by name, email, or phone..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '7px',
+                    borderRadius: '4px',
+                    border: '1px solid #ccc'
+                  }}
+                />
+
+                {/* Select All / Unselect All and Selected counter */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <button onClick={toggleSelectAll}>
+                    {selectedContacts.size < filteredContacts().length ? 'Select All' : 'Unselect All'}
+                  </button>
+                  <div>Selected: {selectedContacts.size}</div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                <button onClick={toggleSelectAll}>
-                  {selectedContacts.size < contacts.length ? 'Select All' : 'Unselect All'}
-                </button>
-                <div>Selected: {selectedContacts.size}</div>
-              </div>
-
-              {contacts.map((contact) => (
+              {filteredContacts().map((contact) => (
                 <div key={contact.id} style={{ borderBottom: '1px solid #ddd', padding: '5px 0', display: 'flex', alignItems: 'center' }}>
                   <input
                     type="checkbox"
