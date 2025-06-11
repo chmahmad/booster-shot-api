@@ -1,56 +1,73 @@
-const GHL_API_KEY = process.env.GHL_API_KEY || process.env.GHL_API_TOKEN;
-const GHL_API_CONTACTS_URL = "https://rest.gohighlevel.com/v1/contacts/";
+const API_TOKEN = process.env.GHL_API_TOKEN || process.env.GHL_API_KEY;
+const GHL_API_CONTACTS_URL = "https://rest.gohighlevel.com/v1/contacts";
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
+
   const { locationId } = req.query;
+  const limit = 100; // reasonable batch size per request
+
+  if (!API_TOKEN) {
+    return res.status(500).json({ error: 'Missing API token' });
+  }
   if (!locationId) {
     return res.status(400).json({ error: 'Missing locationId' });
-  }
-  if (!GHL_API_KEY) {
-    console.error('GHL API Key missing!');
-    return res.status(500).json({ error: 'API key missing' });
   }
 
   try {
     let allTags = new Set();
-    let nextPage = 1;
-    let hasMore = true;
-    const pageLimit = 1000;
-    let totalContactsFetched = 0;
+    let startAfter = null;
+    let startAfterId = null;
+    let more = true;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 20; // Safety: up to 2000 contacts
 
-    while (hasMore && nextPage <= 5) {
-      const resp = await fetch(
-        `${GHL_API_CONTACTS_URL}?locationId=${locationId}&limit=${pageLimit}&page=${nextPage}`,
-        {
-          headers: {
-            Authorization: `Bearer ${GHL_API_KEY}`,
-          }
+    while (more && attempts < MAX_ATTEMPTS) {
+      const params = new URLSearchParams();
+      params.append('limit', limit);
+      params.append('locationId', locationId);
+      if (startAfter) params.append('startAfter', startAfter);
+      if (startAfterId) params.append('startAfterId', startAfterId);
+
+      const ghlUrl = `${GHL_API_CONTACTS_URL}?${params.toString()}`;
+      const response = await fetch(ghlUrl, {
+        headers: {
+          Authorization: `Bearer ${API_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        let error;
+        try {
+          error = await response.json();
+        } catch {
+          error = { message: 'Unknown API error' };
         }
-      );
-      if (!resp.ok) {
-        const body = await resp.text();
-        console.error(`GHL API error: ${resp.status} - ${body}`);
-        throw new Error(`Failed to fetch contacts: ${resp.statusText}`);
+        console.error('GHL API Error:', error);
+        return res.status(response.status).json({ error: error.message || 'API Error' });
       }
-      const data = await resp.json();
+
+      const data = await response.json();
       const contacts = Array.isArray(data.contacts) ? data.contacts : [];
-      totalContactsFetched += contacts.length;
-      contacts.forEach(c => {
-        if (Array.isArray(c.tags)) {
-          c.tags.forEach(tag => allTags.add(tag));
+      contacts.forEach(contact => {
+        if (Array.isArray(contact.tags)) {
+          contact.tags.forEach(tag => allTags.add(tag));
         }
       });
-      hasMore = data.pagination && data.pagination.hasMore;
-      nextPage++;
-      if (!hasMore) break;
+
+      const meta = data.meta || {};
+      startAfter = meta.startAfter || null;
+      startAfterId = meta.startAfterId || null;
+      more = !!(startAfter && startAfterId);
+      attempts++;
     }
-    console.log(`Fetched ${totalContactsFetched} contacts. Found tags: ${Array.from(allTags).join(', ')}`);
+
     return res.status(200).json({ tags: Array.from(allTags) });
-  } catch (err) {
-    console.error('get-tags error:', err);
-    return res.status(500).json({ error: err.message || 'Failed to fetch tags' });
+  } catch (error) {
+    console.error('Server Error:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
   }
 }
