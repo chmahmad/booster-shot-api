@@ -1,5 +1,3 @@
-// This is a new API route for fetching all tags for a location (subaccount) in GoHighLevel
-
 const GHL_API_KEY = process.env.GHL_API_KEY || process.env.GHL_API_TOKEN;
 const GHL_API_CONTACTS_URL = "https://rest.gohighlevel.com/v1/contacts/";
 
@@ -12,16 +10,18 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing locationId' });
   }
   if (!GHL_API_KEY) {
+    console.error('GHL API Key missing!');
     return res.status(500).json({ error: 'API key missing' });
   }
 
-  // We'll fetch the first 1000 contacts and collect all unique tags.
   try {
     let allTags = new Set();
     let nextPage = 1;
     let hasMore = true;
     const pageLimit = 1000;
-    while (hasMore && nextPage <= 5) { // up to 5000 contacts
+    let totalContactsFetched = 0;
+
+    while (hasMore && nextPage <= 5) {
       const resp = await fetch(
         `${GHL_API_CONTACTS_URL}?locationId=${locationId}&limit=${pageLimit}&page=${nextPage}`,
         {
@@ -30,9 +30,14 @@ export default async function handler(req, res) {
           }
         }
       );
-      if (!resp.ok) throw new Error('Failed to fetch contacts');
+      if (!resp.ok) {
+        const body = await resp.text();
+        console.error(`GHL API error: ${resp.status} - ${body}`);
+        throw new Error(`Failed to fetch contacts: ${resp.statusText}`);
+      }
       const data = await resp.json();
       const contacts = Array.isArray(data.contacts) ? data.contacts : [];
+      totalContactsFetched += contacts.length;
       contacts.forEach(c => {
         if (Array.isArray(c.tags)) {
           c.tags.forEach(tag => allTags.add(tag));
@@ -42,8 +47,10 @@ export default async function handler(req, res) {
       nextPage++;
       if (!hasMore) break;
     }
+    console.log(`Fetched ${totalContactsFetched} contacts. Found tags: ${Array.from(allTags).join(', ')}`);
     return res.status(200).json({ tags: Array.from(allTags) });
   } catch (err) {
+    console.error('get-tags error:', err);
     return res.status(500).json({ error: err.message || 'Failed to fetch tags' });
   }
 }
