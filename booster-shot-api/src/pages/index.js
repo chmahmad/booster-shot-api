@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { fetchGoogleSheet } from '../lib/fetchGoogleSheet';
+
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzkVfD4fEUHuGryVKiRR_SKtWeyMFCkxTyGeAKPlaY0yR5XJq_0xuYYEbA6v3odZeMKHA/exec";
 
 export default function ContactList() {
   const [locationId, setLocationId] = useState(null);
@@ -24,18 +25,15 @@ export default function ContactList() {
   const [offerCategories, setOfferCategories] = useState([]);
   const [campaignNames, setCampaignNames] = useState([]);
 
-  // Google Sheet ID and GID
-  const SHEET_ID = '1VIg_-o7akUicqWX0CuVedozJW44UEM6vcQ-RCpvsdoE';
-  const GID = 0;
-
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setLocationId(params.get('location_id'));
   }, []);
 
-  // Load Google Sheet offers
+  // Load Google Sheet offers from your Apps Script Web App (JSON)
   useEffect(() => {
-    fetchGoogleSheet(SHEET_ID, GID)
+    fetch(WEB_APP_URL)
+      .then(res => res.json())
       .then(data => {
         setOffers(data);
         const categories = Array.from(new Set(data.map(row => row.Offer_Category).filter(Boolean)));
